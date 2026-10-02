@@ -3,8 +3,6 @@
 [![PyPI](https://img.shields.io/pypi/v/gnosislab)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/pypi/l/gnosislab)](https://github.com/cloudcell/gnosislab/blob/master/LICENSE)
-[![Downloads](https://img.shields.io/pypi/dm/gnosislab)](https://pypi.org/project/gnosislab/)
-[![Total downloads](https://img.shields.io/pepy/dt/gnosislab)](https://pepy.tech/project/gnosislab)
 [![Last commit](https://img.shields.io/github/last-commit/cloudcell/gnosislab)](https://github.com/cloudcell/gnosislab)
 
 Umbrella project — a composed research-automation distribution.
