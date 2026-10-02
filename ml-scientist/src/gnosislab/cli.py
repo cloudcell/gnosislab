@@ -95,26 +95,37 @@ def _ensure_server_config(name: str) -> None:
 
 
 # MCP client integrations — `gnosislab setup <tool>` merges the five
-# server entries into the tool's config file. Each entry: config
-# path, the top-level key holding servers, and the field name that
-# carries the transport ("transport" for mcpServers-style tools,
-# "type" for VS Code's servers schema).
+# server entries into the tool's config file. Each tool: config
+# path, the top-level key holding servers, and the entry style —
+#   "http"     → {"url": …, "transport": "http"}   (mcpServers schema)
+#   "vscode"   → {"type": "http", "url": …}        (VS Code mcp.json)
+#   "remote"   → {"type": "remote", "url": …, "enabled": true} (opencode)
 MCP_TOOLS = {
-    "opencode":    ("~/.config/opencode/opencode.json", "mcpServers", "transport"),
-    "vscodium":    ("~/.config/VSCodium/User/mcp.json", "servers", "type"),
-    "vscode":      ("~/.config/Code/User/mcp.json", "servers", "type"),
-    "windsurf":    ("~/.codeium/windsurf/mcp_config.json", "mcpServers", "transport"),
-    "cursor":      ("~/.cursor/mcp.json", "mcpServers", "transport"),
-    "claude-code": ("~/.claude.json", "mcpServers", "transport"),
+    "opencode":    ("~/.config/opencode/opencode.json", "mcp", "remote"),
+    "vscodium":    ("~/.config/VSCodium/User/mcp.json", "servers", "vscode"),
+    "vscode":      ("~/.config/Code/User/mcp.json", "servers", "vscode"),
+    "windsurf":    ("~/.codeium/windsurf/mcp_config.json", "mcpServers", "http"),
+    "cursor":      ("~/.cursor/mcp.json", "mcpServers", "http"),
+    "claude-code": ("~/.claude.json", "mcpServers", "http"),
 }
 
+# Every container key any tool uses — `setup` sweeps our ml-*
+# entries out of the wrong ones so a schema fix never leaves stale
+# blocks behind.
+_MCP_CONTAINER_KEYS = {"mcpServers", "servers", "mcp"}
 
-def _server_entries(kind: str) -> dict[str, dict]:
-    """{ml-episteme: {url: …, transport/type: http}, …} from resolved ports."""
+
+def _server_entries(style: str) -> dict[str, dict]:
+    """{ml-episteme: {…entry in this tool's schema…}, …} from ports."""
     out = {}
     for name in COMPONENTS:
-        entry = {"url": f"http://localhost:{_var(name, 'PORT')}/mcp"}
-        entry[kind] = "http"
+        url = f"http://localhost:{_var(name, 'PORT')}/mcp"
+        if style == "vscode":
+            entry = {"type": "http", "url": url}
+        elif style == "remote":
+            entry = {"type": "remote", "url": url, "enabled": True}
+        else:
+            entry = {"url": url, "transport": "http"}
         out[f"ml-{name}"] = entry
     return out
 
@@ -129,7 +140,7 @@ def _setup(argv: list[str]) -> int:
                 print(f"  {t:<12} {path}  ({key})")
             return 0
         if a == "--print":
-            print(json.dumps({"mcpServers": _server_entries("transport")},
+            print(json.dumps({"mcpServers": _server_entries("http")},
                              indent=2))
             return 0
         if a == "--dry-run":
@@ -146,9 +157,9 @@ def _setup(argv: list[str]) -> int:
         return 2
 
     for tool in tools:
-        path_s, key, field = MCP_TOOLS[tool]
+        path_s, key, style = MCP_TOOLS[tool]
         path = Path(path_s).expanduser()
-        merged_entries = _server_entries(field)
+        merged_entries = _server_entries(style)
         if only:
             merged_entries = {k: v for k, v in merged_entries.items()
                               if k in only}
@@ -168,6 +179,15 @@ def _setup(argv: list[str]) -> int:
                       f" — backed up to {bak}, starting fresh")
                 cfg = {}
         cfg.setdefault(key, {}).update(merged_entries)
+        # Sweep our ml-* entries out of other container keys (stale
+        # blocks from an older schema), dropping keys left empty.
+        for other in _MCP_CONTAINER_KEYS - {key}:
+            block = cfg.get(other)
+            if isinstance(block, dict):
+                for k in merged_entries:
+                    block.pop(k, None)
+                if not block:
+                    cfg.pop(other)
 
         if dry:
             print(f"--- {tool}: {path} (would write) ---")
