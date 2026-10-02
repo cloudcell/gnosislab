@@ -340,6 +340,25 @@ WARMUP = {
 }
 
 
+# Everyday words that are terms of art on specific servers — the
+# collision that lets an instruction like "conduct an investigation"
+# be silently read as Loop-0 work. Disambiguation is read at session
+# start; it is documentation, not enforcement.
+VOCABULARY = {
+    "programme": (
+        "Loop-0 (this server): the unit of scientific work — "
+        "hypotheses, trials, contracts, datarefs."
+    ),
+    "investigation": (
+        "Loop-1 (ml-zetesis, search://session): a bounded inquiry "
+        "into *how research is done* — open_investigation lives "
+        "there, not here. Running Loop-0 science does not satisfy a "
+        "Loop-1 investigation, and vice versa. If the task is to "
+        "'investigate', check which loop the requester means."
+    ),
+}
+
+
 STALE_PROGRAMME_HOURS = _gc.STALE_PROGRAMME_HOURS.value
 
 
@@ -476,6 +495,7 @@ def register(
             "state_machine": STATE_MACHINE,
             "failure_handling": FAILURE_HANDLING,
             "warmup": WARMUP,
+            "vocabulary": VOCABULARY,
             "candidate_attribution": _candidate_attribution(
                 require_candidate_attribution
             ),

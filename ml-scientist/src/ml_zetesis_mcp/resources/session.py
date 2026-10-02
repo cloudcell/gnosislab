@@ -97,6 +97,22 @@ READ_ONLY_NOTE = (
     "To act on implications, drive ml-episteme's own tools directly."
 )
 
+VOCABULARY = {
+    "investigation": (
+        "Loop-1 (this server): to 'investigate' in this lab means "
+        "open_investigation — a bounded inquiry into how research is "
+        "done. A Loop-0 programme (episteme) is a different object; "
+        "running experiments there does not open an inquiry here."
+    ),
+    "programme": (
+        "Loop-0 (ml-episteme, protocol://session): hypotheses, "
+        "trials, contracts. When an investigation's question is "
+        "empirical, declare requires_programme=True at open and link "
+        "via link_programme — the obligation is caller-declared, "
+        "never auto-created (see c-05 'Programme linkage')."
+    ),
+}
+
 
 def _get_open_investigations(store: SearchStore) -> list[dict]:
     invs, _ = store.list_investigations(status="open", limit=50)
@@ -127,6 +143,7 @@ def register(
                 "claims exist only after conclusion, in anamnesis."
             ),
             "read_only_boundary": READ_ONLY_NOTE,
+            "vocabulary": VOCABULARY,
             "open_investigations": _get_open_investigations(store),
             # The actionable digest — same payload as
             # search://status, embedded so the recovery resource

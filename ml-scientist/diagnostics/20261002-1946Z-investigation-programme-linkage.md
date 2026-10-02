@@ -73,6 +73,7 @@ Exit: state the per-part results, quote the refusal texts verbatim,
 and note any check that flagged a state it should not have.
 
 DELIVERABLE — produce an exportable artifact.
+
 1. Write your findings into
    /srv/lab/exchange/diagnostics-out/investigation-programme-linkage/ —
    report.md (narrative: what you did, every refusal verbatim, what

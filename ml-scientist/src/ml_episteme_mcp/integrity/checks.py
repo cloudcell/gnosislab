@@ -320,6 +320,21 @@ def _check_strace_divergence(store) -> dict:
     )
 
 
+# Reason strings the manifest writer (store.py _bounded_digest)
+# records for by-design impossibility classes — a null sha256
+# *with* one of these reasons is an honest row, not a gap.
+# Substring-matched because they embed elsewhere in the reason
+# (e.g. "not readable at finalize: IsADirectoryError" is the
+# pre-v3 shape for a directory open). Everything else — missing
+# reason, or "not readable at finalize" with a real error — still
+# flags: a recorded failure is still a failed capture.
+_UNDIGESTED_BY_DESIGN = (
+    "IsADirectoryError",  # pre-v3 directory opens role'd input_data
+    "not a regular file",  # devices/FIFOs/sockets — undigestable
+    "exceeds digest cap",  # bounded digest: truncated hash is worse
+)
+
+
 def _check_input_data_undigested(store) -> dict:
     """Completed trials whose executed_code.json records an
     input_data file with no digest — the bundle cannot say what data
@@ -332,7 +347,10 @@ def _check_input_data_undigested(store) -> dict:
     from manifests by design (the artifact workspace is the output
     side, not input data), so under sandbox=full an undigested-input
     row is reachable only via read paths outside the artifact dir —
-    the denominators in the detail show what was actually examined."""
+    the denominators in the detail show what was actually examined.
+    Undigested rows carrying a by-design skip reason
+    (_UNDIGESTED_BY_DESIGN — impossibility classes, not failures) are
+    accounted for in the detail, never flagged."""
     rows = store._fetchall(
         """SELECT DISTINCT t.id FROM trials t
            JOIN trial_artifacts ta ON ta.trial_id = t.id
@@ -343,6 +361,7 @@ def _check_input_data_undigested(store) -> dict:
     unrecorded = 0
     manifests_examined = 0
     input_data_total = 0
+    accounted = 0
     for r in rows:
         manifest = _executed_code_manifest(store, r["id"])
         if manifest is None:
@@ -360,12 +379,18 @@ def _check_input_data_undigested(store) -> dict:
             f.get("path")
             for f in entries
             if not f.get("sha256")
-            # Pre-v3 manifests recorded directory opens as input_data
-            # with an IsADirectoryError reason — a directory has no
-            # file digest to take; new manifests role them
-            # 'directory' instead.
-            and "IsADirectoryError" not in (f.get("reason") or "")
+            and not any(
+                r in (f.get("reason") or "")
+                for r in _UNDIGESTED_BY_DESIGN
+            )
         ]
+        accounted += len(
+            [
+                f for f in entries
+                if not f.get("sha256")
+                and f.get("path") not in undigested
+            ]
+        )
         if undigested:
             violations.append(
                 {"trial_id": r["id"], "paths": undigested}
@@ -383,6 +408,11 @@ def _check_input_data_undigested(store) -> dict:
         f"{input_data_total} input_data entries across "
         f"{manifests_examined} manifest(s) lack a recorded digest"
     )
+    if accounted:
+        detail += (
+            f"; {accounted} entry(ies) skipped by recorded reason "
+            "(not a regular file / exceeds digest cap / directory)"
+        )
     if unrecorded:
         detail += (
             f"; {unrecorded} trial(s) carry pre-v2 manifests "

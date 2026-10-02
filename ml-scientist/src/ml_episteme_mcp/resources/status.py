@@ -460,6 +460,10 @@ def status_digest(
         "generated_at": _utc_now_iso(),
         "workflow_position": _workflow_position(recs),
         "open_work": open_work,
+        # Scalar for triage consumers (agora) — completed trials
+        # carrying no observation yet. The grace period silences the
+        # *violation*, not this count.
+        "trials_awaiting_observation": len(facts["needs_obs"]),
         "blockers": blockers,
         "recommended_next": recs,
         "upstream_summary": _upstream_summary(adaptor),

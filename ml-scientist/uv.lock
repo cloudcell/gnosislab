@@ -425,8 +425,8 @@ wheels = [
 ]
 
 [[package]]
-name = "ml-episteme-mcp"
-version = "0.1.7"
+name = "ml-scientist"
+version = "0.1.9"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

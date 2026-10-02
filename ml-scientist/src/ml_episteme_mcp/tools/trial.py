@@ -269,6 +269,11 @@ def _generate_execution_wrapper(
             f"# Load the user's training module\n"
             f"spec = importlib.util.spec_from_file_location('user_training', {repr(module_path)})\n"
             f"module = importlib.util.module_from_spec(spec)\n"
+            f"# Register before exec: dataclasses/typing resolve lazy\n"
+            f"# annotations via sys.modules.get(cls.__module__) — a module\n"
+            f"# missing from sys.modules crashes @dataclass under\n"
+            f"# 'from __future__ import annotations'.\n"
+            f"sys.modules[spec.name] = module\n"
             f"spec.loader.exec_module(module)\n"
             f"\n"
             f"if not hasattr(module, 'run_training'):\n"
@@ -1266,6 +1271,11 @@ def register(
 
         executor_output is persisted on the trial row at finalize time —
         it survives server restarts (the executor's async cache does not).
+
+        artifact_path is a transient staging directory — its contents are
+        captured content-addressed into SQLite at finalize and the files
+        deleted. An empty artifact_path is by design, not lost data:
+        recover contents via get_blob / the code:// resource.
 
         Enforcement: commitment 1 — the loop is the unit (orphan check).
         """
