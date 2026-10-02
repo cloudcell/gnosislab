@@ -44,11 +44,20 @@ pip install gnosislab        # or, better for CLI use:
 uv tool install gnosislab    # isolated env, commands on PATH
 ```
 
-This installs the five MCP servers as console commands
-(`ml-episteme-mcp`, `ml-anamnesis-mcp`, `ml-zetesis-mcp`,
-`ml-arete-mcp`, `ml-agora-mcp`). The `gnosislab` lifecycle script is
-repo-only for now (bash, not shipped in the wheel) — a `gnosislab`
-CLI entry point is planned.
+This installs the `gnosislab` lifecycle command plus the five MCP
+servers (`ml-episteme-mcp`, `ml-anamnesis-mcp`, `ml-zetesis-mcp`,
+`ml-arete-mcp`, `ml-agora-mcp`):
+
+```bash
+gnosislab start all
+gnosislab status
+gnosislab config          # resolved ports + config file location
+```
+
+Ports: built-in defaults (38050–38091) are overridden by
+`~/.config/gnosislab/ports.env` (same KEY=VALUE format as the repo's
+`ports.env`) and by `ML_*` environment variables. Runtime state lives
+in `~/.ml-<name>/`.
 
 ## Run
 

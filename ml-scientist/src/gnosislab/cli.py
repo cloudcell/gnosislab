@@ -1,0 +1,361 @@
+"""gnosislab — lifecycle for the ml-* loop stack (pip-installed CLI).
+
+Mirrors the repo-local `gnosislab` bash script so the two tools
+manage the same state on the same host: servers run detached with
+stdout appended to ~/.ml-<name>/logs/server.log and a pidfile at
+~/.ml-<name>/run/labloop.pid (the on-disk identifiers keep the
+labloop name until the subsystem is renamed).
+
+Port resolution order:
+
+    built-in defaults
+    < ~/.config/gnosislab/ports.env   (same KEY=VALUE format as the
+                                       repo's ports.env; may also set
+                                       ML_EPISTEME_INGEST_TOKEN etc.)
+    < environment variables           (ML_<NAME>_PORT, ML_*_GUI_URL…)
+
+Every resolved ML_* variable is exported into each spawned server —
+peer adaptors read siblings' ports/URLs from the environment, same
+as `set -a; source ports.env` in the launchers.
+"""
+
+from __future__ import annotations
+
+import os
+import signal
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+# Start order: upstreams first, the status hub last (it reads them
+# all). Stop order is the reverse — agora dies first.
+COMPONENTS = ["anamnesis", "episteme", "zetesis", "arete", "agora"]
+
+DEFAULT_PORTS = {
+    "agora": 38050,
+    "arete": 38060,
+    "zetesis": 38070,
+    "episteme": 38080,
+    "anamnesis": 38090,
+}
+
+USER_CONFIG = Path.home() / ".config" / "gnosislab" / "ports.env"
+
+
+def _env_file(path: Path) -> dict[str, str]:
+    """Parse KEY=VALUE / export KEY=VALUE lines; # comments, blanks."""
+    out: dict[str, str] = {}
+    if not path.is_file():
+        return out
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def _resolved_env() -> dict[str, str]:
+    """defaults < user ports.env < process env — the full ML_* set."""
+    env: dict[str, str] = {}
+    for name, port in DEFAULT_PORTS.items():
+        stem = f"ML_{name.upper()}"
+        env[f"{stem}_PORT"] = str(port)
+        env[f"{stem}_GUI_PORT"] = str(port + 1)
+    env["ML_EPISTEME_INGEST_PORT"] = "38082"
+    env.update(_env_file(USER_CONFIG))
+    for key, val in os.environ.items():
+        if key.startswith("ML_"):
+            env[key] = val
+    # Derived GUI URLs — same rule as ports.env: settable, defaulting
+    # to localhost on the resolved GUI port.
+    for name in COMPONENTS:
+        stem = f"ML_{name.upper()}"
+        env[f"{stem}_GUI_URL"] = os.environ.get(
+            f"{stem}_GUI_URL",
+            env.get(f"{stem}_GUI_URL")
+            or f"http://localhost:{env[f'{stem}_GUI_PORT']}",
+        )
+    return env
+
+
+def _var(name: str, suffix: str) -> str:
+    return _resolved_env()[f"ML_{name.upper()}_{suffix}"]
+
+
+def _home(name: str) -> Path:
+    return Path.home() / f".ml-{name}"
+
+
+def _pidfile(name: str) -> Path:
+    return _home(name) / "run" / "labloop.pid"
+
+
+def _pid_alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _managed_pid(name: str) -> int | None:
+    try:
+        return int(_pidfile(name).read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _port_pid(port: int) -> int | None:
+    """Listener pid on a TCP port, or None. Same-user processes only."""
+    try:
+        out = subprocess.run(
+            ["ss", "-ltnpH", f"sport = :{port}"],
+            capture_output=True, text=True,
+        ).stdout
+    except OSError:
+        return None
+    for part in out.split("pid=")[1:]:
+        try:
+            return int(part.split(",")[0].rstrip(")"))
+        except ValueError:
+            continue
+    return None
+
+
+def _is_up(name: str) -> bool:
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{_var(name, 'PORT')}/health", timeout=2
+        )
+        return True
+    except OSError:
+        return False
+
+
+def _child_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.update(_resolved_env())
+    return env
+
+
+def start_one(name: str) -> int:
+    mcp = int(_var(name, "PORT"))
+    gui = int(_var(name, "GUI_PORT"))
+    pid = _managed_pid(name)
+    if _pid_alive(pid):
+        print(f"{name}: already running (pid {pid})")
+        return 0
+    existing = _port_pid(mcp)
+    if existing:
+        print(f"{name}: already running (pid {existing}, unmanaged"
+              " — not started via gnosislab)")
+        return 0
+
+    home = _home(name)
+    (home / "run").mkdir(parents=True, exist_ok=True)
+    (home / "logs").mkdir(parents=True, exist_ok=True)
+    log = home / "logs" / "server.log"
+
+    args = [
+        sys.executable, "-m", f"ml_{name}_mcp",
+        "--transport", "http",
+        "--port", str(mcp),
+        "--stateless",
+        "--observability-port", str(gui),
+        "--log-tool-args",
+    ]
+    # Ingest is enabled iff a token is configured (fail closed,
+    # same as run-ml-episteme.sh).
+    env = _child_env()
+    if env.get("ML_EPISTEME_INGEST_PORT") and \
+            env.get("ML_EPISTEME_INGEST_TOKEN") and name == "episteme":
+        args += ["--ingest-port", env["ML_EPISTEME_INGEST_PORT"]]
+
+    log_fh = open(log, "a")
+    proc = subprocess.Popen(
+        args, env=env, stdin=subprocess.DEVNULL,
+        stdout=log_fh, stderr=subprocess.STDOUT,
+        start_new_session=True,  # setsid — own process group
+    )
+    log_fh.close()
+    _pidfile(name).write_text(f"{proc.pid}\n")
+
+    # Wait for /health so `start all` brings upstreams up cleanly
+    # before their consumers — keeps the integrity trail clean.
+    for _ in range(80):
+        if _is_up(name):
+            print(f"{name}: up (pid {proc.pid}, mcp :{mcp}, gui :{gui})")
+            return 0
+        if not _pid_alive(proc.pid):
+            print(f"{name}: died on startup — see {log}", file=sys.stderr)
+            _pidfile(name).unlink(missing_ok=True)
+            return 1
+        time.sleep(0.5)
+    print(f"{name}: still starting (pid {proc.pid}) — see {log}")
+    return 0
+
+
+def stop_one(name: str) -> int:
+    pid = _managed_pid(name)
+    if _pid_alive(pid):
+        # start_new_session made the child its own process-group
+        # leader — kill the group so any children go down with it.
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except OSError:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+    else:
+        lpid = _port_pid(int(_var(name, "PORT")))
+        if lpid is None:
+            print(f"{name}: not running")
+            _pidfile(name).unlink(missing_ok=True)
+            return 0
+        print(f"{name}: running unmanaged (pid {lpid})"
+              " — terminating by port")
+        try:
+            os.kill(lpid, signal.SIGTERM)
+        except OSError:
+            pass
+        pid = lpid
+
+    for _ in range(40):
+        if not _pid_alive(pid):
+            break
+        time.sleep(0.5)
+    if _pid_alive(pid):
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except OSError:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+    _pidfile(name).unlink(missing_ok=True)
+    print(f"{name}: stopped")
+    return 0
+
+
+def status_one(name: str) -> None:
+    pid = _managed_pid(name)
+    if _pid_alive(pid):
+        state = f"up (pid {pid}, managed)"
+    else:
+        lpid = _port_pid(int(_var(name, "PORT")))
+        state = f"up (pid {lpid}, unmanaged)" if lpid else "down"
+    health = "health ok" if _is_up(name) else "-"
+    print(f"{name:<10} {state:<26} mcp :{_var(name, 'PORT'):<5} "
+          f"gui :{_var(name, 'GUI_PORT'):<5} {health}")
+
+
+def _resolve(target: str) -> list[str]:
+    if target == "all":
+        return list(COMPONENTS)
+    if target in COMPONENTS:
+        return [target]
+    print(f"gnosislab: unknown component '{target}'", file=sys.stderr)
+    print(f"expected: {' '.join(COMPONENTS)} | all", file=sys.stderr)
+    sys.exit(2)
+
+
+def _logs(name: str) -> int:
+    log = _home(name) / "logs" / "server.log"
+    if not log.is_file():
+        print(f"gnosislab: no log at {log}", file=sys.stderr)
+        return 1
+    with open(log) as fh:
+        lines = fh.readlines()
+        sys.stdout.writelines(lines[-10:])
+        sys.stdout.flush()
+        try:
+            while True:
+                line = fh.readline()
+                if line:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                else:
+                    time.sleep(0.25)
+        except KeyboardInterrupt:
+            return 0
+
+
+def _config() -> int:
+    print(f"config file: {USER_CONFIG}"
+          f" ({'present' if USER_CONFIG.is_file() else 'absent — using defaults'})")
+    env = _resolved_env()
+    for name in COMPONENTS:
+        stem = f"ML_{name.upper()}"
+        print(f"  {stem}_PORT={env[stem + '_PORT']}  "
+              f"{stem}_GUI_PORT={env[stem + '_GUI_PORT']}")
+    print("env overrides: any ML_* variable set in the environment wins")
+    return 0
+
+
+USAGE = """gnosislab — lifecycle for the ml-* loop stack.
+
+  gnosislab start   [name|all]   background a server (upstreams first on all)
+  gnosislab stop    [name|all]   terminate (consumers first on all)
+  gnosislab restart [name|all]
+  gnosislab status  [name|all]   pid/ports/health per server (default: all)
+  gnosislab logs    <name>       follow ~/.ml-<name>/logs/server.log
+  gnosislab config               show resolved ports + config file path
+
+names: anamnesis  episteme  zetesis  arete  agora
+
+ports: defaults < ~/.config/gnosislab/ports.env < environment.
+The file uses the same KEY=VALUE format as the repo's ports.env;
+runtime state lives in ~/.ml-<name>/ regardless of install method.
+"""
+
+
+def main() -> None:
+    if Path(sys.argv[0]).name == "labloop":
+        print("note: 'labloop' is being renamed to 'gnosislab'"
+              " — this alias will be removed after the transition",
+              file=sys.stderr)
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    target = sys.argv[2] if len(sys.argv) > 2 else "all"
+
+    if cmd in ("-h", "--help", "help"):
+        print(USAGE)
+        sys.exit(0)
+    if cmd in ("start", "stop", "status"):
+        rc = 0
+        for n in _resolve(target):
+            rc |= {"start": start_one, "stop": stop_one,
+                   "status": status_one}[cmd](n) or 0
+        sys.exit(rc)
+    if cmd == "restart":
+        for n in reversed(_resolve(target)):
+            stop_one(n)
+        rc = 0
+        for n in _resolve(target):
+            rc |= start_one(n) or 0
+        sys.exit(rc)
+    if cmd == "logs":
+        if target == "all":
+            print(USAGE, file=sys.stderr)
+            sys.exit(2)
+        _resolve(target)
+        sys.exit(_logs(target))
+    if cmd == "config":
+        sys.exit(_config())
+
+    print(USAGE)
+    sys.exit(2 if cmd else 0)
+
+
+if __name__ == "__main__":
+    main()
