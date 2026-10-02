@@ -1,5 +1,12 @@
 # GnosisLab
 
+[![PyPI](https://img.shields.io/pypi/v/gnosislab)](https://pypi.org/project/gnosislab/)
+[![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
+[![License](https://img.shields.io/pypi/l/gnosislab)](https://github.com/cloudcell/gnosislab/blob/master/LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/gnosislab)](https://pypi.org/project/gnosislab/)
+[![Total downloads](https://static.pepy.tech/badge/gnosislab)](https://pepy.tech/project/gnosislab)
+[![Last commit](https://img.shields.io/github/last-commit/cloudcell/gnosislab)](https://github.com/cloudcell/gnosislab)
+
 Umbrella project — a composed research-automation distribution.
 Subsystems live in subfolders:
 
@@ -94,6 +101,14 @@ Runtime state lives outside the repo in `~/.ml-<name>/`
 ```bash
 uv run pytest -q     # full suite (1289 tests)
 ```
+
+## Stats
+
+- PyPI: https://pypi.org/project/gnosislab/
+- Downloads: https://pepy.tech/project/gnosislab (per-day/week/month +
+  total; also [pypistats.org/packages/gnosislab](https://pypistats.org/packages/gnosislab)
+  for version/platform breakdowns — both populate after first downloads)
+- Repo: https://github.com/cloudcell/gnosislab
 
 ## Publish
 

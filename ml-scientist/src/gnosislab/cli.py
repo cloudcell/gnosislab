@@ -27,6 +27,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import json
 from pathlib import Path
 
 # Start order: upstreams first, the status hub last (it reads them
@@ -91,6 +92,97 @@ def _ensure_server_config(name: str) -> None:
         ]
     _home(name).mkdir(parents=True, exist_ok=True)
     conf.write_text("\n".join(lines) + "\n")
+
+
+# MCP client integrations — `gnosislab setup <tool>` merges the five
+# server entries into the tool's config file. Each entry: config
+# path, the top-level key holding servers, and the field name that
+# carries the transport ("transport" for mcpServers-style tools,
+# "type" for VS Code's servers schema).
+MCP_TOOLS = {
+    "opencode":    ("~/.config/opencode/opencode.json", "mcpServers", "transport"),
+    "vscodium":    ("~/.config/VSCodium/User/mcp.json", "servers", "type"),
+    "vscode":      ("~/.config/Code/User/mcp.json", "servers", "type"),
+    "windsurf":    ("~/.codeium/windsurf/mcp_config.json", "mcpServers", "transport"),
+    "cursor":      ("~/.cursor/mcp.json", "mcpServers", "transport"),
+    "claude-code": ("~/.claude.json", "mcpServers", "transport"),
+}
+
+
+def _server_entries(kind: str) -> dict[str, dict]:
+    """{ml-episteme: {url: …, transport/type: http}, …} from resolved ports."""
+    out = {}
+    for name in COMPONENTS:
+        entry = {"url": f"http://localhost:{_var(name, 'PORT')}/mcp"}
+        entry[kind] = "http"
+        out[f"ml-{name}"] = entry
+    return out
+
+
+def _setup(argv: list[str]) -> int:
+    tools = [a for a in argv if a in MCP_TOOLS]
+    only = None
+    dry = False
+    for a in argv:
+        if a == "--list":
+            for t, (path, key, _k) in MCP_TOOLS.items():
+                print(f"  {t:<12} {path}  ({key})")
+            return 0
+        if a == "--print":
+            print(json.dumps({"mcpServers": _server_entries("transport")},
+                             indent=2))
+            return 0
+        if a == "--dry-run":
+            dry = True
+        elif a.startswith("--only="):
+            only = {s.strip() for s in a[7:].split(",") if s.strip()}
+        elif a.startswith("-") and a not in tools:
+            print(f"gnosislab setup: unknown option '{a}'", file=sys.stderr)
+            return 2
+    if not tools:
+        print("gnosislab setup <tool> [--only ml-episteme,…] [--dry-run]",
+              file=sys.stderr)
+        print(f"tools: {', '.join(MCP_TOOLS)}  (or --list)", file=sys.stderr)
+        return 2
+
+    for tool in tools:
+        path_s, key, field = MCP_TOOLS[tool]
+        path = Path(path_s).expanduser()
+        merged_entries = _server_entries(field)
+        if only:
+            merged_entries = {k: v for k, v in merged_entries.items()
+                              if k in only}
+
+        # Merge into existing JSON; a malformed file gets backed up,
+        # never silently overwritten.
+        cfg: dict = {}
+        if path.is_file():
+            try:
+                cfg = json.loads(path.read_text())
+                if not isinstance(cfg, dict):
+                    raise ValueError("not an object")
+            except (ValueError, OSError) as e:
+                bak = path.with_suffix(path.suffix + ".bak")
+                bak.write_bytes(path.read_bytes())
+                print(f"{tool}: existing {path} unreadable ({e})"
+                      f" — backed up to {bak}, starting fresh")
+                cfg = {}
+        cfg.setdefault(key, {}).update(merged_entries)
+
+        if dry:
+            print(f"--- {tool}: {path} (would write) ---")
+            print(json.dumps(cfg, indent=2))
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        bak = path.with_suffix(path.suffix + ".bak")
+        if path.is_file():
+            bak.write_bytes(path.read_bytes())
+        path.write_text(json.dumps(cfg, indent=2) + "\n")
+        names = ", ".join(merged_entries)
+        print(f"{tool}: wrote {len(merged_entries)} server"
+              f"{'s' if len(merged_entries) > 1 else ''}"
+              f" ({names}) -> {path}")
+    return 0
 
 
 def _env_file(path: Path) -> dict[str, str]:
@@ -368,6 +460,10 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
   gnosislab status  [name|all]   pid/ports/health per server (default: all)
   gnosislab logs    <name>       follow ~/.ml-<name>/logs/server.log
   gnosislab config               show resolved ports + config file path
+  gnosislab setup   <tool>       merge the five servers into a client's
+                                 MCP config (opencode, vscodium, vscode,
+                                 windsurf, cursor, claude-code);
+                                 --list, --print, --dry-run, --only=…
 
 names: anamnesis  episteme  zetesis  arete  agora
 
@@ -409,6 +505,8 @@ def main() -> None:
         sys.exit(_logs(target))
     if cmd == "config":
         sys.exit(_config())
+    if cmd == "setup":
+        sys.exit(_setup(sys.argv[2:]))
 
     print(USAGE)
     sys.exit(2 if cmd else 0)
