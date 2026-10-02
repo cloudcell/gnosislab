@@ -83,6 +83,12 @@ class Investigation(BaseModel):
     verdict: InvestigationVerdict | None = None
     summary: str | None = None
     implications: dict[str, Any] | None = None
+    # Investigation→programme linkage (plan-20261002-1929Z): the
+    # declared obligation, the validated link, and the recorded
+    # discharge when the obligation vacates.
+    requires_programme: bool = False
+    linked_programme_id: str | None = None
+    obligation_discharge: str | None = None
     created_at: str = Field(default_factory=_utc_now)
     concluded_at: str | None = None
 

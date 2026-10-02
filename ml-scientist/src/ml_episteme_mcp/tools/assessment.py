@@ -50,6 +50,7 @@ def register(mcp, store: StateStore, adaptor: MCPAdaptor) -> None:
 
             return ok({
                     "programme_id": programme_id,
+                    "investigation_id": programme.investigation_id,
                     "health": health,
                     "total_trials": len(trials),
                     "completed_trials": len(completed),

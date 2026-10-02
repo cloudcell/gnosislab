@@ -133,6 +133,7 @@ def _collect_open_work(store: SearchStore) -> tuple[list[dict], dict]:
     facts = {
         "campaigns": [], "concludable_invs": [],
         "working_invs": [], "fresh_invs": [],
+        "unlinked_invs": [],
     }
 
     campaigns, _ = store.list_campaigns(status="open", limit=50)
@@ -154,6 +155,8 @@ def _collect_open_work(store: SearchStore) -> tuple[list[dict], dict]:
             "question": inv.question,
             "evidence_refs": len(refs),
             "findings": len(findings),
+            "requires_programme": inv.requires_programme,
+            "linked_programme_id": inv.linked_programme_id,
             "created_at": inv.created_at,
         })
         if findings:
@@ -162,6 +165,8 @@ def _collect_open_work(store: SearchStore) -> tuple[list[dict], dict]:
             facts["working_invs"].append((inv, refs))
         else:
             facts["fresh_invs"].append(inv)
+        if inv.requires_programme and inv.linked_programme_id is None:
+            facts["unlinked_invs"].append(inv)
     # Most recent first — consumers render the head of this list
     # (agora's overview shows the first 5), so recency must lead.
     open_work.sort(key=lambda w: w.get("created_at") or "",
@@ -187,6 +192,13 @@ def _recommend(facts: dict, blockers: list[dict]) -> list[dict]:
             entry["blocked"] = True
         recs.append(entry)
 
+    for inv in facts["unlinked_invs"]:
+        add(
+            "link_programme", [inv.id],
+            "investigation declared requires_programme but no "
+            "programme linked — create the programme on loop0, "
+            "then record the link",
+        )
     for c, results in facts["campaigns"]:
         if results:
             add(
@@ -270,12 +282,23 @@ def status_digest(
     open_work, facts = _collect_open_work(store)
     blockers = _blockers(adaptors) + _violation_blockers(store)
     recs = _recommend(facts, blockers)
+    # Declaration-rate visibility: how many open investigations carry a
+    # programme obligation, and how many of those are unlinked debt.
+    obliged_open = sum(
+        1 for w in open_work
+        if w["kind"] == "investigation" and w.get("requires_programme")
+    )
     digest = {
         "server": "ml-zetesis-mcp",
         "role": "loop1",
         "generated_at": _utc_now_iso(),
         "workflow_position": _workflow_position(recs),
         "open_work": open_work,
+        "programme_obligations": {
+            "open_obliged": obliged_open,
+            "open_unlinked": len(facts["unlinked_invs"]),
+            "open_linked": obliged_open - len(facts["unlinked_invs"]),
+        },
         "blockers": blockers,
         "recommended_next": recs,
         "upstream_summary": _upstream_summary(adaptors),

@@ -40,6 +40,28 @@ def _skipped(name: str, reason: str) -> dict:
             "detail": f"skipped — {reason}"}
 
 
+async def programme_resolves(evidence, programme_id: str) -> bool:
+    """Two-probe upstream existence check for a linked programme.
+
+    Shared by `link_programme`'s dangling re-link rule and
+    `_check_dangling_programme_links` (plan-20261002-1929Z). Live
+    probe first; an archived programme still resolves — archival is
+    a legitimate terminal state, not a broken link. Both whitelist
+    reads fail → the id exists in no lifecycle state.
+    """
+    for tool in ("assess_programme", "get_archived_programme"):
+        try:
+            raw = await evidence.pull(
+                tool, {"programme_id": programme_id}
+            )
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            if data and not data.get("error"):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def _check_stale_open_investigations(store, stale_seconds: int) -> dict:
     """Open investigations with no evidence pull in
     stale_investigation_seconds — the loop's visible debt."""
@@ -69,6 +91,36 @@ def _check_stale_open_investigations(store, stale_seconds: int) -> dict:
         "stale_open_investigations", violations,
         f"{len(violations)} open investigation(s) idle for "
         f">{stale_seconds}s",
+    )
+
+
+def _check_unlinked_empirical_investigations(store) -> dict:
+    """Declared programme obligations with no link — the
+    investigation says it can only be answered by experiment but
+    no programme was ever recorded (plan-20261002-1929Z).
+
+    open + obliged + unlinked → actionable debt; concluded +
+    obliged + unlinked + undischarged → permanent debt (the loop
+    closed with the obligation outstanding and unexplained)."""
+    rows = store._fetchall(
+        """SELECT id, status, created_at FROM investigations
+           WHERE requires_programme = 1
+             AND linked_programme_id IS NULL
+             AND (status != 'concluded'
+                  OR obligation_discharge IS NULL)"""
+    )
+    violations = [
+        {
+            "investigation_id": r["id"],
+            "status": r["status"],
+            "declared_at": r["created_at"],
+        }
+        for r in rows
+    ]
+    return _res(
+        "unlinked_empirical_investigations", violations,
+        f"{len(violations)} obliged investigation(s) with no "
+        "linked programme",
     )
 
 
@@ -144,6 +196,48 @@ async def _check_minted_claims_resolve(store, claims) -> dict:
         "minted_claims_resolve", violations,
         f"{len(rows)} minted claim(s) checked; "
         f"{len(violations)} unresolvable",
+    )
+
+
+async def _check_dangling_programme_links(store, evidence) -> dict:
+    """Cross-server: every investigation.linked_programme_id must
+    still resolve through the loop0 channel — a link to a programme
+    that no longer exists upstream is broken provenance
+    (plan-20261002-1929Z). Archived resolves (legitimate terminal
+    state), anything unresolvable in every lifecycle state is
+    dangling."""
+    if evidence is None:
+        return _skipped(
+            "dangling_programme_links", "no loop0 evidence channel wired"
+        )
+    rows = store._fetchall(
+        "SELECT id, linked_programme_id FROM investigations "
+        "WHERE linked_programme_id IS NOT NULL"
+    )
+    violations = []
+    for r in rows:
+        try:
+            resolves = await programme_resolves(
+                evidence, r["linked_programme_id"]
+            )
+        except Exception as e:
+            violations.append({
+                "investigation_id": r["id"],
+                "linked_programme_id": r["linked_programme_id"],
+                "problem": f"lookup failed: {e}",
+            })
+            continue
+        if not resolves:
+            violations.append({
+                "investigation_id": r["id"],
+                "linked_programme_id": r["linked_programme_id"],
+                "problem": "unresolvable in loop0 (live and archived "
+                "probes both failed)",
+            })
+    return _res(
+        "dangling_programme_links", violations,
+        f"{len(rows)} linked programme(s) checked; "
+        f"{len(violations)} dangling",
     )
 
 
@@ -546,6 +640,7 @@ async def run_checks(
     store,
     *,
     claims=None,
+    evidence=None,
     connectivity=None,
     stale_investigation_seconds: int = DEFAULT_STALE_INVESTIGATION_SECONDS,
     stale_campaign_seconds: int = DEFAULT_STALE_CAMPAIGN_SECONDS,
@@ -557,6 +652,7 @@ async def run_checks(
         _check_stale_open_investigations(
             store, stale_investigation_seconds
         ),
+        _check_unlinked_empirical_investigations(store),
         _check_asserted_without_claim(store),
         _check_concluded_unminted(store),
         _check_closed_campaigns_scored(store),
@@ -570,6 +666,7 @@ async def run_checks(
         _check_results_spawned(store),
         _check_single_roster_champion(store),
         await _check_minted_claims_resolve(store, claims),
+        await _check_dangling_programme_links(store, evidence),
     ]
     return {
         "server": "ml-zetesis-mcp",
@@ -590,6 +687,7 @@ async def run_and_log(
     store,
     *,
     claims=None,
+    evidence=None,
     connectivity=None,
     config: dict | None = None,
     trigger: str = "tool",
@@ -605,6 +703,7 @@ async def run_and_log(
     payload = await run_checks(
         store,
         claims=claims,
+        evidence=evidence,
         connectivity=connectivity,
         stale_investigation_seconds=cfg.get(
             "stale_investigation_seconds",
@@ -627,7 +726,7 @@ async def run_and_log(
 
 
 async def start_integrity_monitor(
-    store, *, claims=None, connectivity=None, config=None
+    store, *, claims=None, evidence=None, connectivity=None, config=None
 ):
     """Startup + periodic invariant sweeps — the audit trail is on by
     default, not on request. Runs one check immediately
@@ -643,6 +742,11 @@ async def start_integrity_monitor(
     def _claims():
         return claims() if callable(claims) else claims
 
+    # evidence (loop0 channel) follows the same rebindable pattern —
+    # resolve per sweep, never cached.
+    def _evidence():
+        return evidence() if callable(evidence) else evidence
+
     # connectivity may be a callable returning the current report —
     # channel state changes on reconnect; resolve per sweep.
     def _connectivity():
@@ -653,6 +757,7 @@ async def start_integrity_monitor(
     await run_and_log(
         store,
         claims=_claims(),
+        evidence=_evidence(),
         connectivity=_connectivity(),
         config=cfg,
         trigger="startup",
@@ -668,6 +773,7 @@ async def start_integrity_monitor(
                 await run_and_log(
                     store,
                     claims=_claims(),
+                    evidence=_evidence(),
                     connectivity=_connectivity(),
                     config=cfg,
                     trigger="interval",

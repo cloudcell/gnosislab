@@ -190,6 +190,7 @@ def main() -> None:
             monitor_task = await start_integrity_monitor(
                 store,
                 claims=lambda: adaptors.claims,
+                evidence=lambda: adaptors.evidence,
                 connectivity=adaptors.connectivity_report,
                 config=config.get("integrity", {}),
             )

@@ -27,6 +27,26 @@ def _confidence(conf: float | None) -> str:
     )
 
 
+def _programme_cell(inv: Investigation) -> str:
+    """Link-status cell (plan-20261002-1929Z): the declared
+    obligation and how it stands — linked id, flagged debt,
+    discharged, or no obligation."""
+    if not inv.requires_programme:
+        return '<span class="muted">—</span>'
+    if inv.linked_programme_id:
+        return (
+            f'<span class="mono">{escape(inv.linked_programme_id)}'
+            "</span>"
+        )
+    if inv.obligation_discharge:
+        return '<span class="muted">discharged</span>'
+    return (
+        '<span class="status status-abandoned">unlinked</span>'
+        if inv.status.value != "open"
+        else '<span class="status status-provisional">obliged</span>'
+    )
+
+
 def _inv_row(inv: Investigation, store: SearchStore) -> str:
     findings = store.list_findings(inv.id)
     refs = store.list_evidence_refs(inv.id)
@@ -41,6 +61,7 @@ def _inv_row(inv: Investigation, store: SearchStore) -> str:
         f'<td><span class="status status-{escape(inv.status.value)}">'
         f"{escape(inv.status.value)}</span></td>"
         f"<td>{escape(verdict)}</td>"
+        f"<td>{_programme_cell(inv)}</td>"
         f"<td>{len(refs)}</td><td>{len(findings)}</td><td>{minted}</td>"
         f"<td>{format_timestamp(inv.created_at)}</td>"
         "</tr>"
@@ -57,6 +78,7 @@ def _inv_table(invs: list[Investigation], store: SearchStore) -> str:
     return (
         "<table><thead><tr>"
         "<th>Question</th><th>ID</th><th>Status</th><th>Verdict</th>"
+        "<th>Programme</th>"
         "<th>Pulls</th><th>Findings</th><th>Claims</th><th>Opened</th>"
         "</tr></thead>"
         f"<tbody>{rows}</tbody></table>"
@@ -181,6 +203,25 @@ def render_investigation_detail(
             f"{format_timestamp(inv.concluded_at)}</p>"
         )
 
+    obligation_line = ""
+    if inv.requires_programme:
+        if inv.linked_programme_id:
+            obligation_line = (
+                '<p>programme obligation: <span class="mono">'
+                f'{escape(inv.linked_programme_id)}</span></p>'
+            )
+        elif inv.obligation_discharge:
+            obligation_line = (
+                '<p class="muted">programme obligation discharged: '
+                f'{escape(inv.obligation_discharge)}</p>'
+            )
+        else:
+            obligation_line = (
+                '<p>programme obligation: '
+                '<span class="status status-abandoned">unlinked</span>'
+                ' — declared requires_programme, no programme recorded</p>'
+            )
+
     body = f"""
     <h1><span class="mono">{escape(inv.id)}</span></h1>
     <div class="card">
@@ -189,6 +230,7 @@ def render_investigation_detail(
             <span class="status status-{escape(inv.status.value)}">{escape(inv.status.value)}</span>
         </p>
         {verdict_line}
+        {obligation_line}
         <p class="muted" style="margin-top: 0.5rem">
             opened {format_timestamp(inv.created_at)}
         </p>

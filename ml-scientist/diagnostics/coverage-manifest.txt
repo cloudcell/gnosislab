@@ -138,11 +138,12 @@ search://status -> connectivity-fault-observability, grounded-constants
 check_invariants -> arm-campaign-verbs, blob-retrieval-and-input-digests, boundary-class-registry, campaign-metric-write-gate, campaign-orchestration, campaign-value-gate-abandon, canary-and-correction, cancel-spawn-window-kill, channel-current-fields, claim-mint-loop2-reftypes, claim-valid-until-expiry, connectivity-fault-observability, connectivity-live-gating, integrity-report-honesty, orphan-rollback-derivation, rc11-extraction-findings, rc7-surface-verification, rc9-findings, read-paths-and-registries, resource-surface, retry-reason-ordering, roster-rollback-derivation, sandbox-env-scrub, sealed-path-runtime-deny, sealed-provenance-honesty, spawn-guard-ordering, state-machine-coverage, stderr-elision-and-schema-docs, trial-terminal-precedence, write-boundary-gates
 acknowledge_violation -> connectivity-live-gating, integrity-report-honesty, sealed-path-runtime-deny, sealed-provenance-honesty
 read_resource -> channel-lasterror-heals, rc7-surface-verification, resource-surface
-open_investigation -> read-paths-and-registries, state-machine-coverage
+open_investigation -> read-paths-and-registries, state-machine-coverage, investigation-programme-linkage
+link_programme -> investigation-programme-linkage
 pull_evidence -> arm-campaign-verbs, canary-and-correction, claim-mint-loop2-reftypes, rc7-surface-verification, rc9-findings, state-machine-coverage, write-boundary-gates
 record_finding -> numeric-provenance, read-paths-and-registries, state-machine-coverage
 drop_finding -> state-machine-coverage
-conclude_investigation -> numeric-provenance, read-paths-and-registries, state-machine-coverage
+conclude_investigation -> numeric-provenance, read-paths-and-registries, state-machine-coverage, investigation-programme-linkage
 abandon_investigation -> state-machine-coverage
 get_investigation -> numeric-provenance, read-paths-and-registries
 list_investigations -> read-paths-and-registries

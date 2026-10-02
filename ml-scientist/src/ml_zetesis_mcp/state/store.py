@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS investigations (
     verdict           TEXT,
     summary           TEXT,
     implications_json TEXT,
+    requires_programme INTEGER NOT NULL DEFAULT 0,
+    linked_programme_id TEXT,
+    obligation_discharge TEXT,
     created_at        TEXT NOT NULL,
     concluded_at      TEXT
 );
@@ -334,6 +337,28 @@ class SearchStore:
                     )
             self.conn.commit()
 
+        # investigations gained the programme-linkage triple with
+        # plan-20261002-1929Z — declared obligation, validated link,
+        # recorded discharge. Plain additive columns.
+        if "investigations" in tables:
+            cols = {
+                r["name"]
+                for r in self.conn.execute(
+                    "PRAGMA table_info(investigations)"
+                )
+            }
+            for col, decl in (
+                ("requires_programme", "INTEGER NOT NULL DEFAULT 0"),
+                ("linked_programme_id", "TEXT"),
+                ("obligation_discharge", "TEXT"),
+            ):
+                if col not in cols:
+                    self.conn.execute(
+                        f"ALTER TABLE investigations "
+                        f"ADD COLUMN {col} {decl}"
+                    )
+            self.conn.commit()
+
     def close(self) -> None:
         if self.conn:
             self.conn.close()
@@ -381,8 +406,9 @@ class SearchStore:
             """INSERT INTO investigations
                (id, question, scope_json, budget_json, status,
                 verdict, summary, implications_json,
-                created_at, concluded_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                requires_programme, linked_programme_id,
+                obligation_discharge, created_at, concluded_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 inv.id, inv.question, json.dumps(inv.scope),
                 json.dumps(inv.budget) if inv.budget is not None else None,
@@ -391,6 +417,8 @@ class SearchStore:
                 inv.summary,
                 json.dumps(inv.implications)
                 if inv.implications is not None else None,
+                int(inv.requires_programme), inv.linked_programme_id,
+                inv.obligation_discharge,
                 inv.created_at, inv.concluded_at,
             ),
         )
@@ -430,17 +458,30 @@ class SearchStore:
         verdict: InvestigationVerdict,
         summary: str,
         implications: dict | None,
+        obligation_discharge: str | None = None,
     ) -> None:
         self._execute(
             """UPDATE investigations SET status = ?, verdict = ?,
-               summary = ?, implications_json = ?, concluded_at = ?
+               summary = ?, implications_json = ?,
+               obligation_discharge = ?, concluded_at = ?
                WHERE id = ?""",
             (
                 InvestigationStatus.concluded.value, verdict.value,
                 summary,
                 json.dumps(implications) if implications is not None else None,
+                obligation_discharge,
                 _now_iso(), investigation_id,
             ),
+        )
+        self.conn.commit()
+
+    def link_programme(
+        self, investigation_id: str, programme_id: str
+    ) -> None:
+        self._execute(
+            "UPDATE investigations SET linked_programme_id = ? "
+            "WHERE id = ?",
+            (programme_id, investigation_id),
         )
         self.conn.commit()
 
@@ -468,6 +509,9 @@ class SearchStore:
                 json.loads(row["implications_json"])
                 if row["implications_json"] else None
             ),
+            requires_programme=bool(row["requires_programme"]),
+            linked_programme_id=row["linked_programme_id"],
+            obligation_discharge=row["obligation_discharge"],
             created_at=row["created_at"],
             concluded_at=row["concluded_at"],
         )

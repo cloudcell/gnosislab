@@ -57,6 +57,7 @@ def register(
         payload = await run_and_log(
             store,
             claims=adaptors.claims,
+            evidence=adaptors.evidence,
             connectivity=adaptors.connectivity_report(),
             config=integrity_config,
             trigger="tool",

@@ -250,6 +250,7 @@ class Archiver:
             budget_max_wall_time_hours REAL NOT NULL,
             metric_direction TEXT NOT NULL DEFAULT 'maximize',
             candidate_version_id TEXT,
+            investigation_id TEXT,
             status TEXT NOT NULL,
             created_at TEXT NOT NULL
         );

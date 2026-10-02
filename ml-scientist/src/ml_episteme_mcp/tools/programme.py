@@ -71,6 +71,7 @@ def register(
         budget: Annotated[dict | str, Field(description='Budget object {max_trials (required), max_wall_time_hours}; extra keys recorded but not enforced. May be a JSON-encoded string.')],
         metric_direction: Annotated[Literal['minimize', 'maximize'], Field(description="'minimize' (loss-like: perplexity, error) | 'maximize' (quality: accuracy, F1) — steers search and best-trial ranking.")] = "maximize",
         candidate_version_id: Annotated[str | None, Field(description='RSI Phase-0 correlation — which registered candidate created this programme; must exist if given.')] = None,
+        investigation_id: Annotated[str | None, Field(description='Zetesis investigation this programme answers to — claimed provenance, recorded but not verified against zetesis (plan-20261002-1929Z).')] = None,
     ) -> Annotated[CallToolResult, CreateProgrammeOut]:
         """Create a research programme with a goal, constraints, and budget.
 
@@ -85,6 +86,12 @@ def register(
 
         candidate_version_id: optional RSI Phase 0 correlation — which
         registered candidate created this programme. Must exist if given.
+
+        investigation_id: optional zetesis correlation — which open
+        investigation declared this programme as its obligation
+        (open_investigation requires_programme → link_programme).
+        Recorded as claimed provenance: episteme has no read path into
+        zetesis, so the id is stored, not verified.
         """
         try:
             constraints = coerce_json(constraints, dict, "constraints")
@@ -141,6 +148,7 @@ def register(
                 budget_max_wall_time_hours=b.max_wall_time_hours,
                 metric_direction=metric_direction,
                 candidate_version_id=candidate_version_id,
+                investigation_id=investigation_id,
             )
             store.create_programme(programme)
 
@@ -150,6 +158,8 @@ def register(
             )
 
             result = {"programme_id": programme.id, "status": programme.status.value}
+            if investigation_id:
+                result["investigation_id"] = investigation_id
             if budget_extras:
                 result["budget_extras_not_enforced"] = sorted(budget_extras)
             return ok(result)
@@ -215,6 +225,7 @@ def register(
                         "goal": p["goal"][:120],
                         "status": p["status"],
                         "candidate_version_id": p["candidate_version_id"],
+                        "investigation_id": p["investigation_id"],
                         "metric_direction": p["metric_direction"],
                         "created_at": p["created_at"],
                     }

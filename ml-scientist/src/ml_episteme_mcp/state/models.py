@@ -103,6 +103,10 @@ class Programme(BaseModel):
         default=None,
         description="Candidate that created this programme (RSI Phase 0 correlation)",
     )
+    investigation_id: str | None = Field(
+        default=None,
+        description="Zetesis investigation this programme answers to (claimed provenance — not upstream-verified; plan-20261002-1929Z)",
+    )
     status: ProgrammeStatus = ProgrammeStatus.active
     created_at: str = Field(default_factory=_utc_now)
 

@@ -477,6 +477,7 @@ CREATE TABLE IF NOT EXISTS programmes (
     budget_max_wall_time_hours REAL NOT NULL,
     metric_direction TEXT NOT NULL DEFAULT 'maximize',
     candidate_version_id TEXT,
+    investigation_id TEXT,
     status TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -736,6 +737,14 @@ class StateStore:
         if "candidate_version_id" not in cols:
             self._conn.execute(
                 "ALTER TABLE programmes ADD COLUMN candidate_version_id TEXT"
+            )
+            self._conn.commit()
+        # investigation→programme linkage (plan-20261002-1929Z) —
+        # claimed provenance back-edge; episteme cannot verify it
+        # against zetesis, it only records the claim.
+        if "investigation_id" not in cols:
+            self._conn.execute(
+                "ALTER TABLE programmes ADD COLUMN investigation_id TEXT"
             )
             self._conn.commit()
 
@@ -1027,8 +1036,8 @@ class StateStore:
             "INSERT INTO programmes "
             "(id, goal, constraints_json, allowed_variables_json, "
             "budget_max_trials, budget_max_wall_time_hours, metric_direction, "
-            "candidate_version_id, status, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "candidate_version_id, investigation_id, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 p.id,
                 p.goal,
@@ -1038,6 +1047,7 @@ class StateStore:
                 p.budget_max_wall_time_hours,
                 p.metric_direction,
                 p.candidate_version_id,
+                p.investigation_id,
                 p.status.value,
                 p.created_at,
             ),
@@ -1058,6 +1068,10 @@ class StateStore:
             budget_max_wall_time_hours=row["budget_max_wall_time_hours"],
             metric_direction=row["metric_direction"],
             candidate_version_id=row["candidate_version_id"],
+            investigation_id=(
+                row["investigation_id"]
+                if "investigation_id" in row.keys() else None
+            ),
             status=row["status"],
             created_at=row["created_at"],
         )

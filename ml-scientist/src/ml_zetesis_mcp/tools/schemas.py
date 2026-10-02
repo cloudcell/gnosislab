@@ -87,6 +87,15 @@ def coerce_json(value: Any, expected: type, name: str) -> Any:
 class OpenInvestigationOut(TypedDict, total=False):
     investigation_id: str | None
     status: str | None
+    next: dict | None
+
+
+class LinkProgrammeOut(TypedDict, total=False):
+    investigation_id: str | None
+    linked_programme_id: str | None
+    linked: bool | None
+    idempotent: bool | None
+    evidence_ref_id: str | None
 
 
 class RecordFindingOut(TypedDict, total=False):
@@ -104,6 +113,7 @@ class ConcludeInvestigationOut(TypedDict, total=False):
     findings_minted: int | None
     edges_created: int | None
     implications: dict | None
+    obligation_discharge: str | None
 
 
 class GetInvestigationOut(TypedDict, total=False):

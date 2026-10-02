@@ -57,6 +57,14 @@ REMEDY_TOOLS = {
     "stale_open_investigations": {
         "conclude_investigation", "abandon_investigation",
     },
+    # Declared obligation: link satisfies it, conclude discharges it —
+    # both must stay reachable or the debt can't be serviced.
+    "unlinked_empirical_investigations": {
+        "link_programme", "conclude_investigation",
+    },
+    # Broken link: re-link is the repair on open investigations;
+    # on concluded ones only acknowledge_violation discharges.
+    "dangling_programme_links": {"link_programme"},
     "asserted_without_claim": set(),
     "concluded_unminted": set(),
     "minted_claims_resolve": set(),

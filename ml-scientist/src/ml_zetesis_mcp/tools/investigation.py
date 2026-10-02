@@ -21,6 +21,7 @@ from ..enforcement.checks import (
     check_tool_whitelisted,
     check_verdict_valid,
 )
+from ..integrity.checks import programme_resolves
 from ..state.models import (
     EvidenceRef,
     EvidenceSource,
@@ -31,7 +32,7 @@ from ..state.models import (
     InvestigationVerdict,
 )
 from ..state.store import SearchStore
-from .schemas import coerce_json, fail, ok, ConcludeInvestigationOut, GetInvestigationOut, ListInvestigationsOut, OpenInvestigationOut, RecordFindingOut, AbandonInvestigationOut, DropFindingOut, PullEvidenceOut
+from .schemas import coerce_json, fail, ok, ConcludeInvestigationOut, GetInvestigationOut, LinkProgrammeOut, ListInvestigationsOut, OpenInvestigationOut, RecordFindingOut, AbandonInvestigationOut, DropFindingOut, PullEvidenceOut
 from typing import Annotated, Literal
 from pydantic import Field
 from mcp.types import CallToolResult
@@ -123,6 +124,9 @@ def _investigation_json(inv: Investigation, store: SearchStore) -> dict:
             "verdict": inv.verdict.value if inv.verdict else None,
             "summary": inv.summary,
             "implications": inv.implications,
+            "requires_programme": inv.requires_programme,
+            "linked_programme_id": inv.linked_programme_id,
+            "obligation_discharge": inv.obligation_discharge,
             "created_at": inv.created_at,
             "concluded_at": inv.concluded_at,
         },
@@ -166,6 +170,7 @@ def register(
         question: Annotated[str, Field(description='What the investigation asks.')],
         scope: Annotated[dict | str, Field(description='Declared domain — programme_ids, candidate_ids, claim types, or time windows the inquiry claims to cover (the Duhem-Quine boundary); may be JSON-encoded.')],
         budget: Annotated[dict | str | None, Field(description='Optional limits {max_pulls, max_wall_time_hours} — recorded, not yet enforced. May be JSON-encoded.')] = None,
+        requires_programme: Annotated[bool | str, Field(description='Declared obligation: this inquiry can only be answered by a Loop-0 experiment programme. When true the investigation owes a linked programme — flagged by unlinked_empirical_investigations until link_programme records it (or conclude_investigation discharges it).')] = False,
     ) -> Annotated[CallToolResult, OpenInvestigationOut]:
         """Open a bounded inquiry into how research is done.
 
@@ -178,6 +183,10 @@ def register(
         declared scope records what the investigation *claims* to cover.
         budget: optional limits ({max_pulls, max_wall_time_hours}) —
         recorded, not yet enforced.
+        requires_programme: declare that the question can only be
+        answered by experiment. The investigation then owes a linked
+        episteme programme — create the programme on Loop 0, then
+        record it with link_programme (plan-20261002-1929Z).
         """
         try:
             if not question.strip():
@@ -185,17 +194,27 @@ def register(
             scope = coerce_json(scope, dict, "scope")
             if budget is not None:
                 budget = coerce_json(budget, dict, "budget")
+            requires_programme = coerce_json(
+                requires_programme, bool, "requires_programme"
+            )
             inv = Investigation(
                 id=f"inv-{uuid.uuid4().hex[:8]}",
                 question=question,
                 scope=scope,
                 budget=budget,
+                requires_programme=requires_programme,
             )
             store.create_investigation(inv)
-            return ok({
+            payload: dict = {
                 "investigation_id": inv.id,
                 "status": "open",
-            })
+            }
+            if requires_programme:
+                payload["next"] = {
+                    "action": "create_programme",
+                    "then": "link_programme",
+                }
+            return ok(payload)
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
 
@@ -352,6 +371,7 @@ def register(
         verdict: Annotated[Literal['findings', 'null_result'], Field(description="findings | null_result — 'findings' mints live findings to anamnesis; 'null_result' closes honestly with nothing asserted.")],
         summary: Annotated[str, Field(description="The investigation's distilled conclusion text.")],
         implications: Annotated[dict | str | None, Field(description='Loop-0 handoff — a proposed programme/hypothesis/strategy the client can enact; object or JSON-encoded.')] = None,
+        programme_discharge: Annotated[str | None, Field(description='Obligation discharge — when a requires_programme investigation concludes without a linked programme, this short rationale vacates the obligation honestly (recorded, auditable); without it the concluded row stays flagged by unlinked_empirical_investigations.')] = None,
     ) -> Annotated[CallToolResult, ConcludeInvestigationOut]:
         """Close the inquiry and distill its findings into memory.
 
@@ -371,6 +391,11 @@ def register(
         hypothesis, or strategy the driving client can enact via
         create_programme/formulate_hypothesis. Zetesis proposes; Loop 0
         disposes.
+
+        programme_discharge: an obliged (requires_programme)
+        investigation that legitimately concluded "no programme
+        needed" records its rationale here — the obligation is
+        vacated explicitly, not silently (plan-20261002-1929Z).
         """
         try:
             err, inv = check_investigation_open(store, investigation_id)
@@ -458,6 +483,7 @@ def register(
                     InvestigationVerdict(verdict),
                     summary,
                     implications,
+                    obligation_discharge=programme_discharge,
                 )
 
             return ok({
@@ -470,6 +496,7 @@ def register(
                 "findings_minted": len(claim_ids),
                 "edges_created": edges_created,
                 "implications": implications,
+                "obligation_discharge": programme_discharge,
             })
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
@@ -489,6 +516,98 @@ def register(
             return ok({
                 "investigation_id": investigation_id,
                 "status": "abandoned",
+            })
+        except Exception as e:
+            return fail(json.dumps({"error": str(e)}))
+
+    @mcp.tool()
+    async def link_programme(
+        investigation_id: Annotated[str, Field(description='ID of the target investigation (must be open).')],
+        programme_id: Annotated[str, Field(description='ID of the episteme programme this investigation is accountable to — validated upstream before recording.')],
+    ) -> Annotated[CallToolResult, LinkProgrammeOut]:
+        """Record the Loop-0 programme an investigation owes.
+
+        Declared obligation (requires_programme) → satisfied link.
+        The programme_id is validated through the loop0 evidence
+        channel before storing — a link is provenance, so recording
+        an unresolvable id is refused. The validation pull is itself
+        logged as an evidence_ref: the consult belongs in the trail.
+
+        Re-linking: idempotent to the same id; a different id is
+        refused while the existing link resolves — unless the
+        existing link is dangling (the sanctioned repair for a
+        programme that no longer exists upstream). Open
+        investigations only; a concluded inquiry's debt is history.
+
+        plan-20261002-1929Z.
+        """
+        try:
+            err, inv = check_investigation_open(store, investigation_id)
+            if err:
+                return fail(json.dumps({"error": err}))
+
+            if inv.linked_programme_id == programme_id:
+                return ok({
+                    "investigation_id": investigation_id,
+                    "linked_programme_id": programme_id,
+                    "linked": True,
+                    "idempotent": True,
+                })
+
+            if adaptors.evidence is None:
+                if "evidence" in getattr(adaptors, "_channels", {}):
+                    return fail(json.dumps({
+                        "error": "loop0 channel is configured but "
+                        "not yet connected — the connectivity "
+                        "supervisor is retrying the upstream; try "
+                        "again shortly."
+                    }))
+                return fail(json.dumps({
+                    "error": "No loop0 adaptor configured — cannot "
+                    "validate a programme link. Wire [adaptors."
+                    "evidence] in ml-zetesis.toml."
+                }))
+
+            # Re-link rule: a resolving link can never be re-pointed
+            # silently; a dangling one invites repair.
+            if inv.linked_programme_id is not None:
+                if await programme_resolves(
+                    adaptors.evidence, inv.linked_programme_id
+                ):
+                    return fail(json.dumps({
+                        "error": "investigation already linked to "
+                        f"{inv.linked_programme_id}, which still "
+                        "resolves — re-point by concluding and "
+                        "reopening, not by silent overwrite."
+                    }))
+
+            if not await programme_resolves(
+                adaptors.evidence, programme_id
+            ):
+                return fail(json.dumps({
+                    "error": f"programme {programme_id} does not "
+                    "resolve upstream (assess_programme and "
+                    "get_archived_programme both failed) — a link is "
+                    "provenance; refusing to record an unresolvable "
+                    "reference."
+                }))
+
+            # The validation pull is a consult — log it.
+            ref = EvidenceRef(
+                id=f"eref-{uuid.uuid4().hex[:8]}",
+                investigation_id=investigation_id,
+                source=EvidenceSource.loop0,
+                tool="assess_programme",
+                args={"programme_id": programme_id, "validate": True},
+                ref_ids=[programme_id],
+            )
+            store.create_evidence_ref(ref)
+            store.link_programme(investigation_id, programme_id)
+            return ok({
+                "investigation_id": investigation_id,
+                "linked_programme_id": programme_id,
+                "linked": True,
+                "evidence_ref_id": ref.id,
             })
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
@@ -541,6 +660,9 @@ def register(
                         "question": i.question,
                         "status": i.status.value,
                         "verdict": i.verdict.value if i.verdict else None,
+                        "requires_programme": i.requires_programme,
+                        "linked_programme_id": i.linked_programme_id,
+                        "obligation_discharge": i.obligation_discharge,
                         "created_at": i.created_at,
                         "concluded_at": i.concluded_at,
                     }

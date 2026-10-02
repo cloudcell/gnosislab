@@ -85,6 +85,26 @@ _CHECK_HELP: list[tuple[str, str]] = [
         "a verdict.",
     ),
     (
+        "unlinked_empirical_investigations",
+        "An investigation that declared <code>requires_programme</code> "
+        "(it can only be answered by experiment) with no "
+        "<code>linked_programme_id</code>. Open rows are actionable "
+        "debt (remedy: <code>link_programme</code>, or discharge via "
+        "<code>conclude_investigation programme_discharge</code>); "
+        "concluded-but-undischarged rows are permanent debt — the "
+        "loop closed with the obligation unexplained.",
+    ),
+    (
+        "dangling_programme_links",
+        "Cross-server: a <code>linked_programme_id</code> that no "
+        "longer resolves upstream — live (<code>assess_programme</code>) "
+        "and archived (<code>get_archived_programme</code>) probes both "
+        "fail. Archival is a legitimate terminal state and never "
+        "flags. Repair an open investigation by re-linking; a "
+        "concluded one is acknowledged debt. Skipped — not ok — when "
+        "the loop0 evidence channel is absent.",
+    ),
+    (
         "asserted_without_claim",
         "A finding marked <code>asserted</code> whose "
         "<code>claim_id</code> is null — the status says it reached "
