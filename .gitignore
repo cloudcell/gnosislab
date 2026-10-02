@@ -1,0 +1,30 @@
+# python
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# envs / secrets
+.env
+*.env
+!ml-scientist/ports.env
+.venv/
+.venv
+
+# test + tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# runtime state
+*.db
+nohup.out
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store

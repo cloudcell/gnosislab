@@ -1,0 +1,343 @@
+"""Upstream adaptors for arete — the loop's three protocol channels.
+
+- ``Loop0Adaptor`` — read-only MCP client of the Loop-0 experiment
+  server (ml-episteme): descendant-trial evidence lives here until
+  Loop-1's population machinery lands.
+- ``Loop1Adaptor`` — read-only MCP client of the Loop-1 search server
+  (ml-zetesis): investigation outcomes — which research-system
+  candidates promoted and at what quality — are Loop-2's declared
+  input.
+- ``ClaimsAdaptor`` — the ClaimsRole client (anamnesis): reads via
+  pull_evidence; minting uses typed assert_claim/relate calls at
+  record_meta_decision.
+
+All three are dumb passthroughs — the tool-name whitelists live in
+enforcement/checks.py. All three are optional at startup: absent
+means absent — a pull against an unwired adaptor fails with a clear
+error; the server still serves its own state.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import datetime, timezone
+from typing import Any
+
+from .mcp_client import MCPClientAdaptor, ProbeTimeout, describe_error
+
+
+class UpstreamAdaptor(MCPClientAdaptor):
+    """Generic MCP client of an upstream server.
+
+    Returns the upstream payload as-is (text). Callers parse JSON.
+    """
+
+    async def pull(self, tool: str, args: dict[str, Any]) -> str:
+        return await self.call_tool(tool, args)
+
+
+class Loop0Adaptor(UpstreamAdaptor):
+    """Read-only client of the Loop-0 server (ml-episteme)."""
+
+
+class Loop1Adaptor(UpstreamAdaptor):
+    """Read-only client of the Loop-1 server (ml-zetesis)."""
+
+
+class Loop1OrchestrationAdaptor(UpstreamAdaptor):
+    """Write-capable client of the Loop-1 server (ml-zetesis).
+
+    The Loop-2 campaign-orchestration channel — a separate role from
+    ``loop1`` so the read channel cannot grow write verbs. Its
+    whitelist (LOOP1_ORCHESTRATION_TOOLS) admits only the
+    campaign-lifecycle calls; enforcement lives in checks.py, this
+    adaptor is a dumb passthrough.
+    """
+
+    async def push(self, tool: str, args: dict[str, Any]) -> str:
+        return await self.call_tool(tool, args)
+
+
+class ClaimsAdaptor(UpstreamAdaptor):
+    """Client of the claims-memory server (anamnesis).
+
+    Doubles as the `anamnesis` pull source (reads) and the minting
+    channel (assert_claim/relate at record_meta_decision).
+    """
+
+    @staticmethod
+    def _parse(result: Any, tool: str) -> dict[str, Any]:
+        data = json.loads(result) if isinstance(result, str) else result
+        if isinstance(data, dict) and data.get("error"):
+            raise RuntimeError(f"Claims server rejected {tool}: {data['error']}")
+        return data
+
+    async def assert_claim(
+        self,
+        content: str,
+        type: str,
+        evidence: list[dict[str, Any]] | None = None,
+        source_id: str | None = None,
+        confidence_computation: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._parse(await self.call_tool("assert_claim", {
+            "content": content,
+            "type": type,
+            "evidence": evidence,
+            "source_id": source_id,
+            "confidence_computation": confidence_computation,
+        }), "assert_claim")
+
+    async def relate(
+        self,
+        from_claim: str,
+        to_ref: str,
+        ref_type: str,
+        relation: str,
+        source_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._parse(await self.call_tool("relate", {
+            "from_claim": from_claim,
+            "to_ref": to_ref,
+            "ref_type": ref_type,
+            "relation": relation,
+            "source_id": source_id,
+        }), "relate")
+
+
+class ChannelSpec:
+    """A configured upstream channel — the registry entry survives a
+    dead peer so the connectivity supervisor can keep retrying.
+
+    ``adaptor`` is the reconnectable client object; the live slot
+    (``adaptors.<name>``) stays None until a connect succeeds — tools
+    keep their "absent means absent" read, but absence is now
+    transient rather than terminal.
+    """
+
+    def __init__(
+        self, name: str, role: str, target: str, adaptor: "MCPClientAdaptor"
+    ) -> None:
+        self.name = name
+        self.role = role
+        self.target = target
+        self.adaptor = adaptor
+        self.state = "down"  # "down" | "up" — set by the supervisor
+        self.attempts = 0
+        self.last_error: str | None = None
+        self.last_failed_operation: str | None = None
+        self.last_failed_at: str | None = None
+        self.probe: str | None = None
+        self.last_probe_at: str | None = None
+        self.connected_at: str | None = None
+
+    def mark_up(self) -> None:
+        self.state = "up"
+        # Freshly connected — unprobed until the supervisor's next
+        # ping answers. A stale "ok"/"busy" from the previous session
+        # must not ride the report as current liveness (rc-15 F4).
+        self.probe = "pending"
+        self.last_error = None
+        self.connected_at = datetime.now(
+            timezone.utc
+        ).isoformat(timespec="seconds")
+
+    def mark_down(self, error: str | None) -> None:
+        self.state = "down"
+        # A dead channel has no liveness — a lingering "busy"/"ok"
+        # probe state contradicts state=down in the same payload.
+        self.probe = "down"
+        self.last_error = error
+
+
+def _target_of(config: dict[str, Any]) -> str:
+    if "url" in config:
+        return config["url"]
+    return f"stdio:{config.get('command', '?')}"
+
+
+class Adaptors:
+    """Mutable container for the loop's three upstream channels.
+
+    Tools read ``adaptors.loop0`` / ``adaptors.loop1`` /
+    ``adaptors.claims`` at call time — a failed connect leaves the
+    channel registered-but-None (transient absence); the connectivity
+    supervisor retries configured channels until peers appear, so
+    ``run-ml-*.sh`` order stops mattering.
+    """
+
+    def __init__(self):
+        self.loop0: Loop0Adaptor | None = None
+        self.loop1: Loop1Adaptor | None = None
+        self.loop1_orchestration: Loop1OrchestrationAdaptor | None = None
+        self.claims: ClaimsAdaptor | None = None
+        self._channels: dict[str, ChannelSpec] = {}
+
+    def register_channel(
+        self, name: str, role: str, adaptor: "MCPClientAdaptor"
+    ) -> None:
+        """Register a configured channel. Does NOT set the live slot —
+        that happens only when connect() succeeds."""
+        self._channels[name] = ChannelSpec(
+            name, role, _target_of(adaptor.config), adaptor
+        )
+
+    def connectivity_report(self) -> list[dict[str, Any]]:
+        """Snapshot of who is connected in what role — the integrity
+        layer's ``upstream_connectivity`` input."""
+        report = []
+        for name, spec in self._channels.items():
+            live = getattr(self, name, None)
+            dead = getattr(live, "session_dead", None)
+            up = live is not None and not (dead and dead())
+            src = live if live is not None else spec.adaptor
+            report.append({
+                "channel": name,
+                "role": spec.role,
+                "target": spec.target,
+                "state": "up" if up else "down",
+                "attempts": spec.attempts,
+                "last_error": spec.last_error
+                or getattr(src, "last_error", None),
+                "last_operation": getattr(src, "last_operation", None),
+                "last_failed_operation": spec.last_failed_operation
+                or getattr(src, "last_failed_operation", None),
+                "last_failed_at": spec.last_failed_at
+                or getattr(src, "last_failed_at", None),
+                "probe": spec.probe
+                or getattr(src, "last_probe_state", None),
+                "last_probe_at": spec.last_probe_at
+                or getattr(src, "last_probe_at", None),
+                "last_probe_ms": getattr(src, "last_probe_ms", None),
+                "in_flight_operation": getattr(
+                    src, "in_flight_operation", None
+                ),
+                "in_flight_since": getattr(
+                    src, "in_flight_since", None
+                ),
+                "connected_at": spec.connected_at,
+                "call_timeout_seconds": getattr(
+                    src, "config", {}
+                ).get("call_timeout_seconds"),
+            })
+        return report
+
+
+async def run_connectivity_supervisor(
+    adaptors: Adaptors,
+    interval_seconds: float,
+    *,
+    probe_timeout_seconds: float = 5.0,
+    log=print,
+) -> None:
+    """Keep configured channels connected — the convergence path that
+    makes ``run-ml-*.sh`` launch order irrelevant.
+
+    Each tick: a live channel whose session died (the upstream exiting
+    kills the client task — passive detection, no probing) is dropped
+    back to the registry; a down channel gets a fresh ``connect()``.
+    Runs until cancelled.
+    """
+    async def _tick(name: str, spec: ChannelSpec) -> None:
+        live = getattr(adaptors, name, None)
+        if live is not None:
+            dead = getattr(live, "session_dead", None)
+            if dead is not None and dead():
+                try:
+                    await live.disconnect()
+                except Exception:
+                    pass
+                setattr(adaptors, name, None)
+                op = getattr(
+                    live, "in_flight_operation", None
+                ) or getattr(live, "last_failed_operation", None)
+                if op:
+                    spec.last_failed_operation = op
+                    spec.last_failed_at = datetime.now(
+                        timezone.utc
+                    ).isoformat(timespec="seconds")
+                spec.mark_down(
+                    f"upstream session ended during {op}"
+                    if op
+                    else "upstream session ended"
+                )
+                log(
+                    f"WARNING: {name} ({spec.role}) channel lost — "
+                    "will retry"
+                )
+                return
+            # Passive detection is blind on an idle channel — a
+            # dead peer's session only dies when the channel does
+            # I/O. One protocol ping per tick is the least
+            # intrusive liveness signal: transport error → the
+            # peer is gone (drop and retry); timeout → alive but
+            # unresponsive (busy — keep the session, reconnecting
+            # would not help).
+            ping = getattr(live, "ping", None)
+            if ping is not None:
+                try:
+                    await ping(probe_timeout_seconds)
+                except ProbeTimeout:
+                    spec.probe = "busy"
+                    spec.last_probe_at = datetime.now(
+                        timezone.utc
+                    ).isoformat(timespec="seconds")
+                    log(
+                        f"WARNING: {name} ({spec.role}) channel "
+                        "alive but not answering (ping timeout) — "
+                        "busy, not down"
+                    )
+                except Exception as e:
+                    try:
+                        await live.disconnect()
+                    except Exception:
+                        pass
+                    setattr(adaptors, name, None)
+                    spec.mark_down(
+                        f"ping failed: {describe_error(e)}"
+                    )
+                    log(
+                        f"WARNING: {name} ({spec.role}) channel "
+                        "lost — will retry"
+                    )
+                else:
+                    spec.probe = "ok"
+                    spec.last_probe_at = datetime.now(
+                        timezone.utc
+                    ).isoformat(timespec="seconds")
+            return
+        spec.attempts += 1
+        try:
+            # The handshake must be deadline-bounded: a peer that
+            # listens but never answers (a wedged event loop looks
+            # exactly like this) would park the supervisor mid-
+            # connect forever — 'down' never reached, recovery
+            # never noticed.
+            await asyncio.wait_for(
+                spec.adaptor.connect(), probe_timeout_seconds
+            )
+        except TimeoutError:
+            spec.mark_down(
+                "connect timed out — upstream listening but "
+                "not answering"
+            )
+            return
+        except Exception as e:
+            spec.mark_down(describe_error(e))
+            return
+        setattr(adaptors, name, spec.adaptor)
+        spec.mark_up()
+        log(f"{name} ({spec.role}) adaptor connected")
+
+    while True:
+        await asyncio.sleep(interval_seconds)
+        # Channels tick concurrently — a wedged peer's probe/connect
+        # wait must not serialize behind another channel's timeout
+        # (rc-15 F4: hung-peer detection stacked ~310 s serially).
+        await asyncio.gather(
+            *(
+                _tick(name, spec)
+                for name, spec in adaptors._channels.items()
+            )
+        )

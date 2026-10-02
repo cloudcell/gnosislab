@@ -1,0 +1,43 @@
+# python
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# envs / secrets
+.env
+*.env
+!ports.env
+ingest.env
+.venv
+.venv/
+
+# test + tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# runtime state
+*.db
+.ml-episteme-data/
+nohup.out
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
+
+# NOTE: latex build artifacts (papers/*.aux/.log/.fls/...) and
+# reference *.log files under docs/ are deliberately TRACKED —
+# do not add *.log, *.aux, etc. here.
+
+scripts/mcp_probe_report.*
+
+diagnostics/out/
+sxport/

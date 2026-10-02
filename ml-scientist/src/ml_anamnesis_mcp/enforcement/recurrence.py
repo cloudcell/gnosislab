@@ -1,0 +1,397 @@
+"""Recurrent self-improvement protocol — plan-20260926-0438Z.
+
+Consultation duty as a rejection point: mutating tools (``assert_claim``,
+``relate``) refuse until the server's status digest has been read
+within a freshness TTL (``[enforcement] status_freshness_seconds``;
+``0`` disables). The digest read also populates a cache whose top
+recommendation is injected into every successful tool result as
+``next``.
+
+Governance debt gates writes on top of the freshness gate: open,
+unacknowledged integrity violations refuse the mutating pair except
+when the violation's remedy is a claim-level fix — supersession is
+how memory corrections work, so ``assert_claim``/``relate`` stay
+available for the checks they can clear.
+
+Known v1 limitation (documented in the plan): the watermark is
+server-global, not keyed to the calling session — one client's
+consult satisfies another's duty, and aggregator polls of
+``claims://status`` (e.g. agora's upstream fetches) stamp it as
+well. Accepted under the single-writer lab assumption; session-keyed
+watermarks are v2.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Callable
+
+from mcp.types import CallToolResult, TextContent
+
+from ..integrity.checks import log_dir_for
+from ..integrity.log import list_check_logs, read_run
+
+STATUS_RESOURCE = "claims://status"
+STATUS_SESSION = "claims://session"
+
+# Tool-name prefixes exempt from every gate — reads can never be
+# gated by the debts they report on (rc-12: read_resource was gated
+# by decision_debt because "read_" was missing). Load-bearing: any
+# future read_* tool must never mutate, or this prefix has to go.
+READ_PREFIXES = (
+    "get_", "list_", "check_", "verify_", "assess_", "describe_",
+    "wait_", "read_",
+)
+
+ALWAYS_EXEMPT = {
+    "check_invariants",
+    "acknowledge_violation",
+}
+
+# Memory-layer checks are all claim-graph fixable — supersession and
+# re-assertion are the remedies, so the mutating pair stays available
+# for them.
+REMEDY_TOOLS = {
+    "unverifiable_confidence": {"assert_claim"},
+    "dangling_claim_refs": {"assert_claim", "relate"},
+    "broken_supersession": {"assert_claim"},
+    "upstream_connectivity": set(),
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _refusal(msg: str) -> CallToolResult:
+    """Tool-error refusal — same wire shape as tools/schemas.fail()."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps({"error": msg}))],
+        is_error=True,
+    )
+
+
+def canonical_ref(item: Any) -> str:
+    """Stable object reference for a violation entry."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for k in sorted(item):
+            if k == "id" or k.endswith("_id"):
+                return str(item[k])
+        # Connectivity violations name a channel — the channel name is
+        # the stable identity; last_failed_at timestamps would churn a
+        # whole-dict ref and make acknowledgement unmatchable.
+        if item.get("channel"):
+            return f"channel:{item['channel']}"
+        return json.dumps(item, sort_keys=True)
+    return str(item)
+
+
+# Live connectivity provider — install() wires it when the server's
+# adaptor container is in scope. upstream_connectivity is a STATE
+# invariant ("is the channel down NOW"), not an event finding: a
+# logged violation from an outage that has since healed must stop
+# gating writes immediately, not at the next periodic sweep. The
+# logged run remains the audit history; the gate reads the present.
+# (anamnesis has no upstream channels; the plumbing stays for parity.)
+_LIVE_CONNECTIVITY: Callable[[], list[dict]] | None = None
+
+
+def open_violations(store) -> list[dict]:
+    """Unacknowledged violations from the latest logged check run.
+    ``upstream_connectivity`` rows are substituted with live channel
+    state when a provider is wired."""
+    log_dir = log_dir_for(store)
+    runs = list_check_logs(log_dir, limit=1)
+    if not runs:
+        return []
+    run = read_run(log_dir, runs[0]["file"], runs[0]["index"])
+    if not run:
+        return []
+    acked = store.violation_ack_keys()
+    live_conn = None
+    if _LIVE_CONNECTIVITY is not None:
+        try:
+            live_conn = _LIVE_CONNECTIVITY()
+        except Exception:
+            live_conn = None  # report failure → keep logged snapshot
+    out = []
+    for c in run.get("checks", []):
+        violations = c.get("violations", [])
+        if (
+            c.get("name") == "upstream_connectivity"
+            and live_conn is not None
+        ):
+            violations = [
+                ch for ch in live_conn if ch.get("state") != "up"
+            ]
+        for v in violations:
+            ref = canonical_ref(v)
+            if (c.get("name"), ref) not in acked:
+                out.append({
+                    "check": c.get("name"),
+                    "object_ref": ref,
+                    "detail": c.get("detail", ""),
+                })
+    return out
+
+
+def check_no_open_violations(store, tool_name: str) -> str | None:
+    """Violation gate: refuse mutating tools while unacknowledged
+    findings exist — except the tools that remediate them."""
+    openv = open_violations(store)
+    if not openv:
+        return None
+    remedies = set()
+    for v in openv:
+        remedies |= REMEDY_TOOLS.get(v["check"], set())
+    if tool_name in remedies:
+        return None
+    kinds = sorted({v["check"] for v in openv})
+    return (
+        f"{len(openv)} open integrity violation(s) "
+        f"({', '.join(kinds)}) — acknowledge_violation or remediate "
+        "the flagged record(s) before mutating."
+    )
+
+
+class RecurrenceTracker:
+    """Consultation-duty watermark + digest cache (per server process)."""
+
+    def __init__(self) -> None:
+        self.ttl_seconds = 0.0
+        self.status_read_at: float | None = None
+        self.digest: dict | None = None
+        self.digest_computed_at: float | None = None
+        # Post-mutation the cached digest no longer describes the
+        # world — suppress `next` hints until the next status read.
+        self.mutated_since_read: bool = False
+
+    def configure(self, freshness_seconds: float | int | None) -> None:
+        self.ttl_seconds = float(freshness_seconds or 0.0)
+
+    @property
+    def enabled(self) -> bool:
+        return self.ttl_seconds > 0
+
+    def reset(self) -> None:
+        self.status_read_at = None
+        self.digest = None
+        self.digest_computed_at = None
+        self.mutated_since_read = False
+
+    def mark_status_read(self, digest: dict) -> None:
+        now = time.time()
+        self.status_read_at = now
+        self.digest = digest
+        self.digest_computed_at = now
+        self.mutated_since_read = False
+
+    def is_fresh(self) -> bool:
+        return (
+            self.status_read_at is not None
+            and (time.time() - self.status_read_at) <= self.ttl_seconds
+        )
+
+    def check_fresh(self) -> str | None:
+        if not self.enabled or self.is_fresh():
+            return None
+        return (
+            f"Stale session — read {STATUS_RESOURCE} (or "
+            f"{STATUS_SESSION}) before mutating. Consultation duty: "
+            f"status must be re-read every {self.ttl_seconds:.0f}s."
+        )
+
+    def note_mutation(self) -> None:
+        """A mutating tool succeeded — the cached digest
+        predates the change, so its recommended_next is
+        unverified. Suppress hints until the client re-reads
+        status."""
+        self.mutated_since_read = True
+
+    def next_hint(self) -> dict | None:
+        if (not self.enabled or not self.is_fresh()
+                or not self.digest or self.mutated_since_read):
+            return None
+        recs = self.digest.get("recommended_next") or []
+        top = recs[0] if recs else {}
+        return {
+            "action": top.get("action"),
+            "tool": top.get("tool"),
+            "reason": top.get("reason"),
+            # The digest's recommendations are server-global — injected
+            # into entity-scoped payloads they read as per-entity
+            # advice (rc-15 F8). Mark the scope and carry the refs.
+            "scope": "server",
+            "entity_refs": top.get("entity_refs") or [],
+            "blockers": len(self.digest.get("blockers") or []),
+        }
+
+    def inject(self, result: CallToolResult) -> CallToolResult:
+        """Attach ``next`` to a successful result — advisory, never
+        breaks the result on failure."""
+        hint = self.next_hint()
+        if hint is None:
+            return result
+        is_err = getattr(
+            result, "is_error", getattr(result, "isError", False)
+        )
+        if is_err:
+            return result
+        try:
+            if result.content and hasattr(result.content[0], "text"):
+                payload = json.loads(result.content[0].text)
+                if isinstance(payload, dict):
+                    payload["next"] = hint
+                    result.content[0].text = json.dumps(payload)
+            sc = getattr(result, "structured_content", None)
+            if sc is None:
+                sc = getattr(result, "structuredContent", None)
+            if isinstance(sc, dict):
+                sc["next"] = hint
+        except Exception:
+            pass
+        return result
+
+
+TRACKER = RecurrenceTracker()
+
+
+def install_strict_args(mcp) -> None:
+    """Wrap ``mcp.call_tool`` with the undeclared-argument refusal.
+
+    Argument hygiene, not a protocol feature — installed
+    unconditionally by ``create_server``, independent of
+    ``recurrent_protocol`` (ML_RECURRENT_PROTOCOL=0 must not re-open
+    the hole). Installed outermost: a malformed call refuses by name
+    before freshness/debt gates run.
+
+    Lazy snapshot of each tool's declared parameters (public
+    surface). The framework's argument models run extra=ignore —
+    an undeclared argument is silently dropped before the tool body
+    runs (rc-12: `prior`, `constraints`, `valid_from` all vanished
+    this way). A call naming args the signature does not declare is
+    refused here instead of falsifying a record.
+    """
+    original = mcp.call_tool
+    declared_args: dict[str, frozenset] | None = None
+
+    async def _strict_call_tool(name, arguments, context=None):
+        nonlocal declared_args
+        if declared_args is None:
+            declared_args = {
+                t.name: frozenset(
+                    (t.input_schema or {}).get("properties", {})
+                )
+                for t in await mcp.list_tools()
+            }
+        declared = declared_args.get(name)
+        if declared is not None and isinstance(arguments, dict):
+            unknown = sorted(set(arguments) - declared)
+            if unknown:
+                return _refusal(
+                    f"{name} received undeclared argument(s): "
+                    f"{', '.join(unknown)} — refused; undeclared "
+                    "arguments are silently dropped by the argument "
+                    "model"
+                )
+        return await original(name, arguments, context)
+
+    mcp.call_tool = _strict_call_tool
+
+
+def install(
+    mcp,
+    store,
+    tracker: RecurrenceTracker,
+    *,
+    extra_exempt: set[str] | frozenset[str] = frozenset(),
+    extra_gates: tuple[Callable[[str], str | None], ...] = (),
+    live_connectivity: Callable[[], list[dict]] | None = None,
+) -> None:
+    """Wrap ``mcp.call_tool`` with the freshness + governance-debt
+    gates and post-injection.
+
+    ``live_connectivity``: a callable returning the adaptor's current
+    channel report — consulted by open_violations so healed channels
+    stop gating immediately (logged runs remain the audit trail).
+    """
+    global _LIVE_CONNECTIVITY
+    _LIVE_CONNECTIVITY = live_connectivity
+    exempt = set(ALWAYS_EXEMPT) | set(extra_exempt)
+
+    def _is_exempt(name: str) -> bool:
+        return name in exempt or name.startswith(READ_PREFIXES)
+
+    def _gates(tool_name: str) -> str | None:
+        err = check_no_open_violations(store, tool_name)
+        if err:
+            return err
+        for g in extra_gates:
+            if err := g(tool_name):
+                return err
+        return None
+
+    original = mcp.call_tool
+
+    # Undeclared-argument refusal lives in install_strict_args —
+    # always-on, outermost, orthogonal to this protocol wrapper.
+
+    async def _guarded_call_tool(name, arguments, context=None):
+        if not _is_exempt(name):
+            if err := tracker.check_fresh():
+                return _refusal(err)
+            if err := _gates(name):
+                return _refusal(err)
+        result = await original(name, arguments, context)
+        if not _is_exempt(name) and not getattr(
+            result, "is_error", getattr(result, "isError", False)
+        ):
+            tracker.note_mutation()
+        return tracker.inject(result)
+
+    mcp.call_tool = _guarded_call_tool
+
+
+def violation_ack(
+    store, check_name: str, object_ref: str,
+    disposition: str, decided_by: str,
+) -> dict:
+    """Record an acknowledgment and report the residual open set —
+    insert-only governance event, never deletes the finding."""
+    open_before = {
+        (v["check"], v["object_ref"]) for v in open_violations(store)
+    }
+    ack_id = f"vack-{uuid.uuid4().hex[:8]}"
+    store.record_violation_ack(
+        ack_id=ack_id,
+        check_name=check_name,
+        object_ref=object_ref,
+        disposition=disposition,
+        decided_by=decided_by,
+        created_at=_utc_now_iso(),
+    )
+    remaining = open_violations(store)
+    matched = (check_name, object_ref) in open_before
+    out = {
+        "ack_id": ack_id,
+        # The ack row is recorded either way (insert-only ledger —
+        # the attempt itself is a governance event), but the status
+        # must not masquerade as evidence a fault existed.
+        "status": "acknowledged" if matched else "no_matching_violation",
+        "matched_open_violation": matched,
+        "open_violations": len(remaining),
+    }
+    if not matched:
+        # A typo'd object_ref otherwise reads identically to a valid
+        # ack of an already-cleared violation — surface the live open
+        # refs so the caller can see what it should have said (rc-15).
+        out["open_refs"] = [
+            {"check": v["check"], "object_ref": v["object_ref"]}
+            for v in remaining[:20]
+        ]
+    return out
