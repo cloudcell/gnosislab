@@ -1,6 +1,6 @@
 # GnosisLab
 
-[![PyPI](https://img.shields.io/pypi/v/gnosislab)](https://pypi.org/project/gnosislab/)
+[![PyPI](https://img.shields.io/pypi/v/gnosislab?cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/pypi/l/gnosislab)](https://github.com/cloudcell/gnosislab/blob/master/LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/cloudcell/gnosislab)](https://github.com/cloudcell/gnosislab)
