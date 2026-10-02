@@ -631,7 +631,7 @@ def register(
     def capture_bundle(
         trial_id: Annotated[str, Field(description='ID of the target trial.')],
         code_ref: Annotated[str, Field(description='Path to a Python file exposing run_training(config: dict) -> dict returning {"metrics": {...}, "variance": {...}} — see executor://contract.')],
-        env_ref: Annotated[str, Field(description='Environment reference sealed into the bundle (pre-registration).')],
+        env_ref: Annotated[str, Field(description="Environment reference sealed into the bundle (pre-registration). Accepts a venv/conda directory (mounted read-only; its bin/python runs the trial) or a Python executable path (its venv root is mounted). Non-path values like 'python:3.12' are recorded as provenance but do not change the interpreter — the executor default runs.")],
         seeds: Annotated[list[int] | int | str, Field(description='Seed set sealed into the bundle (pre-registration — fixes the assumption before any observation); list or JSON-encoded.')],
         splits: Annotated[dict | str, Field(description='Split spec sealed into the bundle — which data each split used; object or JSON-encoded.')],
         baseline_ref: Annotated[str | None, Field(description='Reference to the baseline the trial compares against.')] = None,
@@ -804,7 +804,7 @@ def register(
     def capture_bundle_from_code_hash(
         trial_id: Annotated[str, Field(description='ID of the target trial.')],
         code_hash: Annotated[str, Field(description="'sha256:...' content address from a prior capture_bundle — NOT a bundle_id; must already exist in code_snippets.")],
-        env_ref: Annotated[str, Field(description='Environment reference sealed into the bundle (pre-registration).')],
+        env_ref: Annotated[str, Field(description="Environment reference sealed into the bundle (pre-registration). Accepts a venv/conda directory (mounted read-only; its bin/python runs the trial) or a Python executable path (its venv root is mounted). Non-path values like 'python:3.12' are recorded as provenance but do not change the interpreter — the executor default runs.")],
         seeds: Annotated[list[int] | int | str, Field(description='Seed set sealed into the bundle (pre-registration); list or JSON-encoded.')],
         splits: Annotated[dict | str, Field(description='Split spec sealed into the bundle; object or JSON-encoded.')],
         baseline_ref: Annotated[str | None, Field(description='Reference to the baseline the trial compares against.')] = None,
@@ -1152,8 +1152,15 @@ def register(
             if python_exe is not None:
                 # Bind the env root, not just the binary — a venv's
                 # bin/python needs ../lib (site-packages, pyvenv.cfg)
-                # visible inside the private tmpfs.
-                extra_ro_paths.append(str(Path(bundle.env_ref)))
+                # visible inside the sandbox, and a file bind onto a
+                # symlink destination dies in bwrap (venv interpreters
+                # are always symlinks). Always bind a directory —
+                # never the executable file itself.
+                _p = Path(bundle.env_ref)
+                extra_ro_paths.append(str(
+                    _p.resolve() if _p.is_dir()
+                    else _p.parent.parent  # <venv>/bin/python → <venv>
+                ))
 
             # Per-trial deadline override: agent-settable (commitment —
             # the agent is a scientist; it sizes its own trials), bounded

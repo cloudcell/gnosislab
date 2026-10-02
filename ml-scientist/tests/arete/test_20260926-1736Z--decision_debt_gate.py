@@ -71,8 +71,10 @@ async def test_debt_blocks_mutators_but_not_evidence_miners(
     # Mutators are gated, naming the debt.
     for tool, args in (
         ("register_improver", {
-            "code_artifact_digest": "none", "model_ref": "m"}),
+            "code_artifact_digest": "none", "model_ref": "m",
+            "capability_profile": {}}),
         ("propose_meta_change", {
+            "proposer_improver_id": "imp-x",
             "spec_delta": {}, "class_map": {},
             "expected_benefit": "x", "falsification": "x",
             "rollback_plan": "x"}),

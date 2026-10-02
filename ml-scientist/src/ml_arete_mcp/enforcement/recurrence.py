@@ -397,29 +397,48 @@ def install_strict_args(mcp) -> None:
     an undeclared argument is silently dropped before the tool body
     runs (rc-12: `prior`, `constraints`, `valid_from` all vanished
     this way). A call naming args the signature does not declare is
-    refused here instead of falsifying a record.
+    refused here instead of falsifying a record. A call *missing* a
+    required arg is refused here too — without this, the framework's
+    bare "Missing key" fires inside the original call and the caller
+    never sees which keys the tool actually declares.
     """
     original = mcp.call_tool
-    declared_args: dict[str, frozenset] | None = None
+    declared_args: dict[str, tuple[frozenset, frozenset]] | None = None
 
     async def _strict_call_tool(name, arguments, context=None):
         nonlocal declared_args
         if declared_args is None:
             declared_args = {
-                t.name: frozenset(
-                    (t.input_schema or {}).get("properties", {})
+                t.name: (
+                    frozenset(
+                        (t.input_schema or {}).get("properties", {})
+                    ),
+                    frozenset(
+                        (t.input_schema or {}).get("required", [])
+                    ),
                 )
                 for t in await mcp.list_tools()
             }
-        declared = declared_args.get(name)
-        if declared is not None and isinstance(arguments, dict):
-            unknown = sorted(set(arguments) - declared)
+        spec = declared_args.get(name)
+        args = arguments if isinstance(arguments, dict) else {}
+        if spec is not None and (arguments is None or isinstance(
+                arguments, dict)):
+            declared, required = spec
+            missing = sorted(required - set(args))
+            if missing:
+                return _refusal(
+                    f"{name} missing required argument(s): "
+                    f"{', '.join(missing)} — declared parameters: "
+                    f"{', '.join(sorted(declared))}"
+                )
+            unknown = sorted(set(args) - declared)
             if unknown:
                 return _refusal(
                     f"{name} received undeclared argument(s): "
                     f"{', '.join(unknown)} — refused; undeclared "
                     "arguments are silently dropped by the argument "
-                    "model"
+                    f"model — declared parameters: "
+                    f"{', '.join(sorted(declared))}"
                 )
         return await original(name, arguments, context)
 
