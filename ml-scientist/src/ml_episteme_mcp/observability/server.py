@@ -581,7 +581,10 @@ def create_observability_app(
         Route("/archive/{archive_id}/programme/{programme_id}", archived_programme_detail),
         Route("/archive/{archive_id}/programme/{programme_id}/trial/{trial_id}", archived_trial_detail),
         Route("/archive/{archive_id}/programme/{programme_id}/trial/{trial_id}/artifact/{filename:path}", archived_trial_artifact_file),
-        Mount("/static", app=StaticFiles(directory=str(static_dir)), name="static"),
+        # check_dir=False: static/ may be absent from installed wheels
+        # (empty dirs don't survive packaging) — requests then 404
+        # instead of crashing app construction.
+        Mount("/static", app=StaticFiles(directory=str(static_dir), check_dir=False), name="static"),
     ]
 
     app = Starlette(

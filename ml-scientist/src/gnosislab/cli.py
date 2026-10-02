@@ -69,7 +69,9 @@ def _resolved_env() -> dict[str, str]:
         stem = f"ML_{name.upper()}"
         env[f"{stem}_PORT"] = str(port)
         env[f"{stem}_GUI_PORT"] = str(port + 1)
-    env["ML_EPISTEME_INGEST_PORT"] = "38082"
+    # NB: no default for ML_EPISTEME_INGEST_PORT — the server fails
+    # closed if a port is set without a token, so it only comes from
+    # the user's config/env alongside ML_EPISTEME_INGEST_TOKEN.
     env.update(_env_file(USER_CONFIG))
     for key, val in os.environ.items():
         if key.startswith("ML_"):

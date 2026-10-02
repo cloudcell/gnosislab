@@ -478,6 +478,14 @@ def render_programme_detail(
             <td>{format_timestamp(c.created_at)}</td>
         </tr>""")
 
+    # Backslash escapes are illegal inside f-string expressions on
+    # Python < 3.12 — build the hx-* attribute strings outside.
+    def _hx(section: str) -> str:
+        if refresh_interval <= 0:
+            return ""
+        return (f'hx-get="/programme/{escape(programme_id)}/{section}" '
+                f'hx-trigger="every {refresh_interval}s" hx-target="this"')
+
     body = f"""
     {archive_banner}
     <h1>{escape(programme.goal)}</h1>
@@ -498,7 +506,7 @@ def render_programme_detail(
         <div class="card">
             <h3>Budget</h3>
             <div id="budget-section"
-                 {"hx-get=\"/programme/" + escape(programme_id) + "/budget\" hx-trigger=\"every " + str(refresh_interval) + "s\" hx-target=\"this\"" if refresh_interval > 0 else ""}>
+                 {_hx("budget")}>
                 {render_budget_bar(len(completed_trials), len(terminal_trials), len(trials), programme.budget_max_trials, used_wall_hours, programme.budget_max_wall_time_hours)}
             </div>
         </div>
@@ -525,7 +533,7 @@ def render_programme_detail(
     </div>
 
     <div class="section" id="trials-section"
-         {"hx-get=\"/programme/" + escape(programme_id) + "/trials\" hx-trigger=\"every " + str(refresh_interval) + "s\" hx-target=\"this\"" if refresh_interval > 0 else ""}>
+         {_hx("trials")}>
         {trials_section}
     </div>
 
