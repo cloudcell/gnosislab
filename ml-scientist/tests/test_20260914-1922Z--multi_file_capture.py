@@ -7,7 +7,7 @@ Tests that:
 - stdlib and third-party imports are skipped
 - recursive imports (A imports B imports C) are captured
 - bundles store code_hash_extra_json
-- the execution wrapper inlines all code files
+- the execution wrapper materializes all code files
 """
 
 import json
@@ -278,8 +278,11 @@ class TestExecutionWrapperMultiFile:
             ],
         )
 
-        # Deps are materialized as real files under _deps/, not inlined
+        # Deps are materialized as real files under _deps/; the
+        # primary is materialized as user_training.py and imported
         assert "def run_training" in wrapper
+        assert "user_training.py" in wrapper
+        assert "module.run_training(config)" in wrapper
         assert "_deps_files" in wrapper
         assert "model.py" in wrapper
         assert "helper.py" in wrapper
@@ -300,11 +303,14 @@ class TestExecutionWrapperMultiFile:
 
         assert "def run_training" in wrapper
         assert "_deps_files" not in wrapper
+        # Primary materialization does not depend on dep_snippets
+        assert "user_training.py" in wrapper
+        assert "module.run_training(config)" in wrapper
 
     def test_wrapper_dotted_import_resolves(self):
-        """Regression: `from pkg.mod import x` inside inlined primary must
-        resolve against materialized dep files — inlining dep text could
-        never satisfy the import machinery."""
+        """Regression: `from pkg.mod import x` inside the materialized
+        primary must resolve against materialized dep files — inlining
+        dep text could never satisfy the import machinery."""
         import subprocess
 
         from ml_episteme_mcp.tools.trial import _generate_execution_wrapper

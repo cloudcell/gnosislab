@@ -133,23 +133,26 @@ class TestCaptureBundleFromCodeHash:
         assert "run_training" in snippet.code_text
 
 
-class TestExecutionWrapperInlining:
-    """Tests for the _generate_execution_wrapper code inlining."""
+class TestExecutionWrapperMaterialization:
+    """Tests for the _generate_execution_wrapper code materialization."""
 
-    def test_wrapper_inlines_code_text(self):
-        """The wrapper inlines code_text when provided."""
+    def test_wrapper_materializes_code_text(self):
+        """The wrapper writes code_text to a file and imports it."""
         code_text = "def run_training(config):\n    return {'metrics': {'loss': 0.5}}\n"
         wrapper = _generate_execution_wrapper(
             "trial-test", {"lr": 0.01}, "code://sha256:abc",
             code_text=code_text,
         )
 
-        # The wrapper should contain the code inline
+        # The wrapper carries the code verbatim and materializes it as
+        # user_training.py, imported through importlib machinery
         assert "def run_training(config):" in wrapper
-        assert "return {'metrics': {'loss': 0.5}}" in wrapper
+        assert "user_training.py" in wrapper
+        assert "importlib.util.spec_from_file_location" in wrapper
+        assert "sys.modules[spec.name] = module" in wrapper
         assert "code://sha256:abc" in wrapper
-        # The wrapper should call run_training
-        assert "result = run_training(config)" in wrapper
+        # The wrapper should call run_training on the imported module
+        assert "result = module.run_training(config)" in wrapper
 
     def test_wrapper_imports_from_file_when_no_code_text(self, code_file):
         """The wrapper imports from file when code_text is None."""
@@ -163,8 +166,8 @@ class TestExecutionWrapperInlining:
         assert str(code_file) in wrapper
         assert "run_training" in wrapper
 
-    def test_wrapper_inline_code_is_executable(self, code_file):
-        """The inlined wrapper code is valid Python that can execute."""
+    def test_wrapper_materialized_code_is_executable(self, code_file):
+        """The materialized wrapper code is valid Python that can execute."""
         code_text = code_file.read_text()
         wrapper = _generate_execution_wrapper(
             "trial-test", {"lr": 0.01}, "code://sha256:abc",
@@ -217,7 +220,7 @@ class TestRerunFromArchiveFlow:
         assert snippet is not None
         assert "run_training" in snippet.code_text
 
-        # Step 5: Generate the execution wrapper with inlined code
+        # Step 5: Generate the execution wrapper (materializes the code)
         wrapper = _generate_execution_wrapper(
             "trial-test", {"lr": 0.01}, b.code_ref,
             code_text=snippet.code_text,

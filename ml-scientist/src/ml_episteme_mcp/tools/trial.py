@@ -184,9 +184,11 @@ def _generate_execution_wrapper(
     - The wrapper prints the result as JSON to stdout
 
     If code_text is provided (content-addressed code from code_snippets),
-    the code is inlined directly into the wrapper instead of imported
-    from a file. This is the rerun-from-archive path: no filesystem
-    dependency.
+    the wrapper materializes it as a real file (user_training.py) next to
+    itself at run time and imports it through importlib — the same
+    spec_from_file_location + sys.modules path used for file code_refs.
+    This is the rerun-from-archive path: no dependency on the original
+    source path.
 
     If dep_snippets is provided (multi-file capture: (original_path,
     code_text) pairs), the wrapper MATERIALIZES them as real files
@@ -201,18 +203,13 @@ def _generate_execution_wrapper(
     """
     config_json = json.dumps(config)
 
-    # --- Content-addressed code: inline from code_snippets ---
+    # --- Content-addressed code: materialize from code_snippets ---
     if code_text is not None:
         deps_block = ""
         if dep_snippets:
             plan = _materialize_plan(dep_snippets)
             if plan:
                 deps_block = (
-                    f"import os, tempfile\n"
-                    f"try:\n"
-                    f"    _base = os.path.dirname(os.path.abspath(__file__))\n"
-                    f"except NameError:\n"
-                    f"    _base = tempfile.mkdtemp(prefix='ml_sci_')\n"
                     f"_deps_dir = os.path.join(_base, '_deps')\n"
                     f"_deps_files = {repr(plan)}\n"
                     f"for _rel, _src in _deps_files.items():\n"
@@ -228,19 +225,36 @@ def _generate_execution_wrapper(
             f"# Trial {trial_id}\n"
             f"# Config: {config_json}\n"
             f"# Code ref: {code_ref}\n"
-            f"# Code inlined from code_snippets (content-addressed)\n"
-            f"import json, sys\n"
+            f"# Code materialized from code_snippets (content-addressed)\n"
+            f"import json, sys, os, tempfile, importlib.util\n"
+            f"\n"
+            f"try:\n"
+            f"    _base = os.path.dirname(os.path.abspath(__file__))\n"
+            f"except NameError:\n"
+            f"    _base = tempfile.mkdtemp(prefix='ml_sci_')\n"
+            f"if _base not in sys.path:\n"
+            f"    sys.path.insert(0, _base)\n"
             f"\n"
             f"{deps_block}"
-            f"# --- Primary module (inlined) ---\n"
-            f"{code_text}\n"
+            f"# --- Primary module (materialized from code_snippets) ---\n"
+            f"# Written to a real file next to the wrapper so __future__\n"
+            f"# headers, __name__/__file__, and cls.__module__ behave as a\n"
+            f"# real import — and so the sys.modules registration applies\n"
+            f"# identically to the file-path branch.\n"
+            f"_primary_path = os.path.join(_base, 'user_training.py')\n"
+            f"with open(_primary_path, 'w', encoding='utf-8') as _f:\n"
+            f"    _f.write({repr(code_text)})\n"
+            f"spec = importlib.util.spec_from_file_location('user_training', _primary_path)\n"
+            f"module = importlib.util.module_from_spec(spec)\n"
+            f"sys.modules[spec.name] = module\n"
+            f"spec.loader.exec_module(module)\n"
             f"\n"
-            f"if 'run_training' not in dir():\n"
+            f"if not hasattr(module, 'run_training'):\n"
             f"    print(json.dumps({{'error': 'code does not expose run_training(config) -> dict', 'code_ref': {repr(code_ref)}}}))\n"
             f"    sys.exit(1)\n"
             f"\n"
             f"config = {repr(config)}\n"
-            f"result = run_training(config)\n"
+            f"result = module.run_training(config)\n"
             f"print(json.dumps(result))\n"
         )
 
@@ -817,8 +831,8 @@ def register(
         programme, gets the code_hash from the bundle, and captures a
         new bundle for a new trial using the same code content. No
         filesystem access is required — the code is loaded from
-        code_snippets by hash and inlined into the execution wrapper
-        at run_trial time.
+        code_snippets by hash, materialized as a real file next to the
+        execution wrapper, and imported at run_trial time.
 
         NOTE: code_hash is a "sha256:..." content address returned by a
         prior capture_bundle — it is NOT a bundle_id. To re-use an

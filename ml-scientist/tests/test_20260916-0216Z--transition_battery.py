@@ -1378,7 +1378,8 @@ class TestExecutionTelemetry:
 
 class TestContentAddressedExecution:
     """code:// bundles must execute with real import semantics — the
-    inlining path could not satisfy `from pkg.mod import x`."""
+    sealed bytes are materialized as real files so `from pkg.mod import x`
+    resolves through the import machinery."""
 
     async def test_code_hash_bundle_resolves_dotted_import(self, pair):
         async with streamable_http_client(pair["sci"]) as (r, w):
