@@ -5,23 +5,23 @@ Do not edit by hand — the checked-in copy is pinned by test.
 
 | Constant | Value / procedure | Class | Status | Scoring | Decision-load | Grounding | Call sites | Last-changed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `PRIOR_CONFIDENCE_MAX` | `0.3` | C1 | IN-RANGE | yes | yes | IN-RANGE — nap-table-d1-transcription.md (Table D-1, row prior=0.30 (one-tailed p=0.05 → posterior 0.624)) | src/ml_anamnesis_mcp/enforcement/checks.py:24, src/ml_arete_mcp/tools/decisions.py:420, src/ml_zetesis_mcp/tools/promotion.py:1646 | 6069a77, 6c7dc6e |
+| `PRIOR_CONFIDENCE_MAX` | `0.3` | C1 | IN-RANGE | yes | yes | IN-RANGE — nap-table-d1-transcription.md (Table D-1, row prior=0.30 (one-tailed p=0.05 → posterior 0.624)) | src/ml_anamnesis_mcp/enforcement/checks.py:24, src/ml_arete_mcp/tools/decisions.py:420, src/ml_zetesis_mcp/tools/promotion.py:1646 | 7bc63dd |
 | `VERDICT_POSTERIOR` | `verdict_posterior(…)` | C1 | DERIVED | yes | no | DERIVED — nap-table-d1-transcription.md (NAP Table D-1 (the prior+p → posterior mapping); 08 §2.2 (the ladder the BF reads onto)) | — | — |
 | `CAMPAIGN_SCORE_ZERO_DIVISOR` | `refuse_zero_divisor(…)` | C2 | THEOREM | yes | no | THEOREM — gleser-hwang-transcription.md (GH transcription (theorem statement); 02/14 (unboundedness)) | — | — |
 | `SEED_COUNT_DEFAULT` | `required_n(…)` | C2 | DERIVED | yes | no | DERIVED — 05-gelman-carlin2014-type-s-type-m-errors.pdf (05 (Type S/M), 06 (rethinking), 07 (pilot bias), 11 (prereg power)) | — | — |
 | `PROMOTION_THRESHOLD` | `min_evidence_rung(…)` | C2 | DERIVED | yes | no | DERIVED — 08-kass-raftery1995-bayes-factors.pdf (08 §2.2 Table — 2 ln BF evidence ladder) | — | — |
-| `STALE_INVESTIGATION_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_zetesis_mcp/integrity/checks.py:20 | c08dfc9 |
-| `STALE_CAMPAIGN_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_zetesis_mcp/integrity/checks.py:21 | c08dfc9 |
-| `STALE_TOURNAMENT_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_arete_mcp/integrity/checks.py:19 | 6c7dc6e |
-| `STALE_PROGRAMME_HOURS` | `24.0` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/resources/session.py:362, src/ml_episteme_mcp/resources/status.py:144, src/ml_episteme_mcp/resources/status.py:436, src/ml_episteme_mcp/resources/status.py:485, src/ml_episteme_mcp/server.py:151 | 2f56c6b, 6c7dc6e |
-| `ARCHIVE_SEAL_WARN_HOURS` | `72.0` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/resources/status.py:437, src/ml_episteme_mcp/resources/status.py:486, src/ml_episteme_mcp/server.py:165 | 2f56c6b, 6c7dc6e |
-| `STATUS_FRESHNESS_SECONDS` | `600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_anamnesis_mcp/server.py:127, src/ml_arete_mcp/config.py:30, src/ml_arete_mcp/server.py:176, src/ml_episteme_mcp/config.py:43, src/ml_episteme_mcp/server.py:220, src/ml_zetesis_mcp/config.py:29, src/ml_zetesis_mcp/server.py:161 | 6c7dc6e, 912ff16, c08dfc9 |
-| `IMPROVEMENT_EPOCH_SECONDS` | `86400` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_arete_mcp/config.py:31, src/ml_arete_mcp/enforcement/recurrence.py:246, src/ml_arete_mcp/enforcement/recurrence.py:251, src/ml_arete_mcp/server.py:179 | 6c7dc6e, 912ff16, f6ea884 |
-| `OBSERVATION_GRACE_SECONDS` | `86400` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:31 | 2f56c6b |
-| `CHECK_INTERVAL_SECONDS` | `300` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_agora_mcp/__main__.py:195, src/ml_agora_mcp/integrity/checks.py:26, src/ml_anamnesis_mcp/__main__.py:140, src/ml_anamnesis_mcp/integrity/checks.py:25, src/ml_arete_mcp/__main__.py:201, src/ml_arete_mcp/integrity/checks.py:561, src/ml_episteme_mcp/__main__.py:376, src/ml_episteme_mcp/integrity/checks.py:33, src/ml_zetesis_mcp/__main__.py:198, src/ml_zetesis_mcp/integrity/checks.py:765 | 2f56c6b, 6069a77, 6c7dc6e, 912ff16, c08dfc9 |
-| `STALLED_MARGIN_SECONDS` | `30` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:27 | 2f56c6b |
-| `TERMINAL_RESIDUE_MARGIN_SECONDS` | `1.0` | C4 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:139 | 2f56c6b |
-| `LOG_MAX_FILES` | `100` | C4 | OPERATIONAL | no | no | OPERATIONAL | src/ml_agora_mcp/integrity/checks.py:27, src/ml_anamnesis_mcp/integrity/checks.py:24, src/ml_arete_mcp/integrity/checks.py:20, src/ml_episteme_mcp/integrity/checks.py:32, src/ml_zetesis_mcp/integrity/checks.py:22 | 2f56c6b, 6069a77, 6c7dc6e, c08dfc9 |
+| `STALE_INVESTIGATION_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_zetesis_mcp/integrity/checks.py:20 | e279f26 |
+| `STALE_CAMPAIGN_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_zetesis_mcp/integrity/checks.py:21 | e279f26 |
+| `STALE_TOURNAMENT_SECONDS` | `3600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_arete_mcp/integrity/checks.py:19 | 7bc63dd |
+| `STALE_PROGRAMME_HOURS` | `24.0` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/resources/session.py:362, src/ml_episteme_mcp/resources/status.py:144, src/ml_episteme_mcp/resources/status.py:436, src/ml_episteme_mcp/resources/status.py:485, src/ml_episteme_mcp/server.py:151 | 08d60a3, 7bc63dd |
+| `ARCHIVE_SEAL_WARN_HOURS` | `72.0` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/resources/status.py:437, src/ml_episteme_mcp/resources/status.py:486, src/ml_episteme_mcp/server.py:165 | 08d60a3, 7bc63dd |
+| `STATUS_FRESHNESS_SECONDS` | `600` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_anamnesis_mcp/server.py:127, src/ml_arete_mcp/config.py:30, src/ml_arete_mcp/server.py:176, src/ml_episteme_mcp/config.py:43, src/ml_episteme_mcp/server.py:220, src/ml_zetesis_mcp/config.py:29, src/ml_zetesis_mcp/server.py:161 | 7bc63dd, e279f26 |
+| `IMPROVEMENT_EPOCH_SECONDS` | `86400` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_arete_mcp/config.py:31, src/ml_arete_mcp/enforcement/recurrence.py:246, src/ml_arete_mcp/enforcement/recurrence.py:251, src/ml_arete_mcp/server.py:179 | 7bc63dd, da2217e |
+| `OBSERVATION_GRACE_SECONDS` | `86400` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:31 | 08d60a3 |
+| `CHECK_INTERVAL_SECONDS` | `300` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_agora_mcp/__main__.py:195, src/ml_agora_mcp/integrity/checks.py:26, src/ml_anamnesis_mcp/__main__.py:140, src/ml_anamnesis_mcp/integrity/checks.py:25, src/ml_arete_mcp/__main__.py:201, src/ml_arete_mcp/integrity/checks.py:561, src/ml_episteme_mcp/__main__.py:376, src/ml_episteme_mcp/integrity/checks.py:33, src/ml_zetesis_mcp/__main__.py:198, src/ml_zetesis_mcp/integrity/checks.py:765 | 08d60a3, 7bc63dd, e279f26 |
+| `STALLED_MARGIN_SECONDS` | `30` | C3 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:27 | 08d60a3 |
+| `TERMINAL_RESIDUE_MARGIN_SECONDS` | `1.0` | C4 | OPERATIONAL | no | no | OPERATIONAL | src/ml_episteme_mcp/integrity/checks.py:139 | 08d60a3 |
+| `LOG_MAX_FILES` | `100` | C4 | OPERATIONAL | no | no | OPERATIONAL | src/ml_agora_mcp/integrity/checks.py:27, src/ml_anamnesis_mcp/integrity/checks.py:24, src/ml_arete_mcp/integrity/checks.py:20, src/ml_episteme_mcp/integrity/checks.py:32, src/ml_zetesis_mcp/integrity/checks.py:22 | 08d60a3, 7bc63dd, e279f26 |
 
 ## Sources
 
