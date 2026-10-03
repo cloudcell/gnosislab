@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gnosislab"
-version = "0.1.15"
+version = "0.1.16"
 description = "Scientific Experiment MCP server — the hypothesis → experiment → evidence → conclusion loop as a first-class object"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,7 @@ dependencies = [
     "mcp>=2.0.1",
     "pydantic>=2.0",
     "httpx>=0.28.1",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 
