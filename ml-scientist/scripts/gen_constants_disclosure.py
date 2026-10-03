@@ -51,15 +51,32 @@ def _call_sites(names: set[str]) -> dict[str, list[str]]:
 
 def _last_changed(sites: list[str]) -> str:
     """Sorted short hashes of the last commit touching each call-site
-    file — empty (no call sites, or no git history) renders ``—``."""
+    line — blame per site, so edits elsewhere in the file do not churn
+    the pinned table. Empty (no call sites, or no git history) renders
+    ``—``."""
     hashes = set()
-    for path in {s.rsplit(":", 1)[0] for s in sites}:
+    for site in sites:
+        path, line = site.rsplit(":", 1)
         r = subprocess.run(
-            ["git", "log", "-1", "--format=%h", "--", path],
+            ["git", "blame", "-L", f"{line},{line}", "--porcelain",
+             "--", path],
             cwd=ROOT, capture_output=True, text=True,
         )
-        if r.returncode == 0 and r.stdout.strip():
-            hashes.add(r.stdout.strip())
+        sha = ""
+        if r.returncode == 0 and r.stdout:
+            sha = r.stdout.split(None, 1)[0].lstrip("^")
+            if set(sha) == {"0"}:  # uncommitted line
+                sha = ""
+        if not sha:
+            # Fall back to the file's last commit (new/uncommitted
+            # call-site lines, or a shallow history boundary).
+            r = subprocess.run(
+                ["git", "log", "-1", "--format=%h", "--", path],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            sha = r.stdout.strip() if r.returncode == 0 else ""
+        if sha:
+            hashes.add(sha[:7])
     return ", ".join(sorted(hashes)) if hashes else "—"
 
 
