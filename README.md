@@ -5,14 +5,41 @@
 [![License](https://img.shields.io/pypi/l/gnosislab)](https://github.com/cloudcell/gnosislab/blob/master/LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/cloudcell/gnosislab)](https://github.com/cloudcell/gnosislab)
 
-Umbrella project — a composed research-automation distribution.
-Subsystems live in subfolders:
+## Quick Start
 
-- `ml-scientist/` — the scientific-experiment MCP stack
-  (hypothesis → experiment → evidence → conclusion): five MCP
-  servers, sealed execution, invariant suite, observability GUIs.
-- `openshell/` — (planned) NVIDIA OpenShell launch-within-shell
-  subsystem.
+1. Install [opencode](https://opencode.ai) **≥ 2.0.14** (the driving
+   agent) and `gnosislab`:
+
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash   # or: npm i -g opencode-ai
+   uv tool install gnosislab                        # or: uv pip install gnosislab
+   ```
+
+2. Start the five MCP servers and wire them into opencode's config
+   (`~/.config/opencode/opencode.json`):
+
+   ```bash
+   gnosislab start all
+   gnosislab setup opencode
+   ```
+
+   (`gnosislab setup --list` shows the other supported clients —
+   vscodium, vscode, windsurf, cursor, claude-code.)
+
+3. Open the lab status hub at <http://localhost:38051/>, then run
+   `opencode` — the `ml-*` tools are available automatically.
+
+Further reading:
+
+- Getting started (high level):
+  <https://loop.cloudcell.workers.dev/docs#getting-started>
+- State machines (details):
+  <https://loop.cloudcell.workers.dev/docs#state-machines>
+
+Feedback welcome —
+[open an issue](https://github.com/cloudcell/gnosislab/issues) :)
+
+
 
 ## Host requirements
 
