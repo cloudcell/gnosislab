@@ -205,10 +205,25 @@ export_one() {
     # state → sxport/<UTC>-<slug>.tar.gz. The slug names the diagnostic
     # and is also the payload dir the agent fills at
     # diagnostics/out/<slug>/.
-    local slug=$1 stamp stage out
+    local slug=$1; shift || true
+    local fmt="tarball" zip_flag=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --format) fmt=$2; shift 2 ;;
+            --zip) zip_flag="--zip"; shift ;;
+            *) echo "gnosislab export: unknown flag '$1'" >&2; return 2 ;;
+        esac
+    done
     if [ -z "$slug" ]; then
         echo "gnosislab export: missing slug — expected 'gnosislab export <slug>'" >&2
         return 2
+    fi
+    # Provenance formats (ro-crate, …) dispatch to gnosislab_export —
+    # a separate package that reads the stores read-only; the tarball
+    # path below stays the diagnostics bundle.
+    if [ "$fmt" != "tarball" ]; then
+        exec uv run python -m gnosislab_export --programme "$slug" \
+            --format "$fmt" --out "sxport/${slug}-rocrate" $zip_flag
     fi
     case "$slug" in
         all|*/*|*..*)
@@ -279,6 +294,10 @@ gnosislab — lifecycle for the ml-* loop stack.
                                  health/logs/integrity trail into
                                  sxport/<UTC>-<slug>.tar.gz (prints path
                                  + sha256 — report these in the run log)
+  gnosislab export  <slug> --format ro-crate [--zip]
+                                 export the programme's provenance as an
+                                 RO-Crate (read-only; code/artifacts/
+                                 results + ro-crate-metadata.json)
 
 names: anamnesis  episteme  zetesis  arete  agora
 
@@ -316,7 +335,7 @@ case "$cmd" in
         exec tail -f "$(home_dir "$target")/logs/server.log"
         ;;
     export)
-        export_one "$target"
+        export_one "$target" "${@:3}"
         ;;
     *)
         usage

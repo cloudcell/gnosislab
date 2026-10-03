@@ -42,6 +42,7 @@ dev = [
 
 [project.scripts]
 gnosislab = "gnosislab.cli:main"
+gnosislab-export = "gnosislab_export.cli:main"
 ml-episteme-mcp = "ml_episteme_mcp.__main__:main"
 ml-anamnesis-mcp = "ml_anamnesis_mcp.__main__:main"
 ml-zetesis-mcp = "ml_zetesis_mcp.__main__:main"
@@ -50,6 +51,7 @@ ml-agora-mcp = "ml_agora_mcp.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "gnosislab_export",
     "src/gnosislab",
     "src/ml_episteme_mcp",
     "src/ml_anamnesis_mcp",
