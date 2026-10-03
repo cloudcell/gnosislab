@@ -47,10 +47,19 @@ def find_free_port(start: int = 18080) -> int:
     between probe-close and subprocess-bind. Binding port 0 lets the
     kernel assign distinct ephemeral ports. `start` is kept for
     call-site compatibility and ignored.
+
+    The kernel ephemeral range (32768-60999) overlaps the production
+    band 38050-38091 (five servers x MCP+GUI, see ports.env) — never
+    hand one of those to a test: it could collide with a live server,
+    or let a test client reach the production store.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    for _ in range(64):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        if not 38050 <= port <= 38091:
+            return port
+    raise RuntimeError("no free port outside the production band 38050-38091")
 
 
 def wait_for_port(port: int, timeout: float = 15.0) -> None:
@@ -110,6 +119,7 @@ archive_dir = "{archive_dir}"
             "--transport", "http",
             "--port", str(mcp_port),
             "--stateless",
+            "--db-path", db_path,
             "--observability-port", str(obs_port),
             "--config", config_path,
         ],
