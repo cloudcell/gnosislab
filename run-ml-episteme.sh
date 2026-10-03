@@ -37,10 +37,14 @@ args=(
 # Ingest is enabled iff a token is configured — the token is the
 # switch, not the port. ports.env always carries the port; without
 # a token (no ingest.env) the surface is simply absent. The server
-# still exits if --ingest-port is passed with no token (fail closed).
+# also reads ML_EPISTEME_INGEST_PORT straight from the environment
+# (fail closed on a missing token), so the port must be unexported
+# when there's no token — exporting it would kill startup instead.
 if [ -n "${ML_EPISTEME_INGEST_PORT:-}" ] && \
    [ -n "${ML_EPISTEME_INGEST_TOKEN:-}" ]; then
     args+=(--ingest-port "${ML_EPISTEME_INGEST_PORT}")
+else
+    unset ML_EPISTEME_INGEST_PORT
 fi
 
 exec uv run ml-episteme-mcp "${args[@]}"
