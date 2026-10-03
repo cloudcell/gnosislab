@@ -28,6 +28,11 @@ dependencies = [
     "tomli>=2.0; python_version < '3.11'",
 ]
 
+[project.urls]
+Homepage = "https://github.com/cloudcell/gnosislab"
+Documentation = "https://loop.cloudcell.workers.dev/docs"
+Repository = "https://github.com/cloudcell/gnosislab"
+Issues = "https://github.com/cloudcell/gnosislab/issues"
 
 [project.optional-dependencies]
 dev = [
