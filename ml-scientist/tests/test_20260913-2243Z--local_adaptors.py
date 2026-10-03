@@ -302,13 +302,13 @@ async def test_trial_env_scrubs_server_and_credential_keys(
     monkeypatch.setenv("MY_CREDENTIAL_FILE", "/x")  # CREDENTIAL pattern
     monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/ssh")  # not credential-shaped
     code = (
-        "import json, os\n"
-        "print(json.dumps(sorted(os.environ)))"
+        "import os\n"
+        "print('\\n'.join(sorted(os.environ)))"
     )
     ex = LocalExecutor(timeout=30, sandbox="none")
     r = json.loads(await ex.execute_code(code, artifact_dir=artifact_dir))
     assert r["status"] == "completed", r
-    env_keys = set(json.loads(r["stdout"]))
+    env_keys = set(r["stdout"].split())
     # Server-internal and credential-shaped keys must be gone.
     assert "ML_EPISTEME_INGEST_TOKEN" not in env_keys
     assert "ML_EPISTEME_DB_PATH" not in env_keys

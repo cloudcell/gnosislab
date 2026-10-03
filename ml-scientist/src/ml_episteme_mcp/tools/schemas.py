@@ -6,7 +6,8 @@ Typed, not strings (commitment 4: constraints are first-class).
 from __future__ import annotations
 
 import json
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal
+from typing_extensions import TypedDict
 
 from pydantic import BaseModel, Field
 

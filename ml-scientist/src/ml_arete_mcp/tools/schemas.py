@@ -9,7 +9,8 @@ behaviour.
 from __future__ import annotations
 
 import json
-from typing import Any, TypedDict
+from typing import Any
+from typing_extensions import TypedDict
 
 from mcp.types import CallToolResult, TextContent
 
