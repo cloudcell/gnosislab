@@ -42,6 +42,9 @@ sxport/
 # from the sdist). Do NOT `git add -f` these.
 /docs
 /.devin
+/.markdownlint.json
+/.markdownlint-cli2.jsonc
+/.markdownlintignore
 /AGENTS.md
 /papers
 /legal
