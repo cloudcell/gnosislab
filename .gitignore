@@ -28,3 +28,17 @@ nohup.out
 .idea/
 .vscode/
 .DS_Store
+
+# ── private: symlinked in from the ml-scientist repo for local work ──
+# Never committed, never published (hatchling excludes ignored paths
+# from the sdist). Do NOT `git add -f` these.
+/docs
+/.devin
+/AGENTS.md
+ml-scientist/docs
+ml-scientist/.devin
+ml-scientist/AGENTS.md
+ml-scientist/papers
+ml-scientist/legal
+ml-scientist/test-tasks
+

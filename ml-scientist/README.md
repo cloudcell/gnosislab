@@ -1,4 +1,4 @@
-# Lab Loop™
+# GnosisLab by Cloudcell
 
 *A research automation engine for empirical work.*
 
