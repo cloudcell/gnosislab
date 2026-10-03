@@ -27,17 +27,14 @@ def _confidence(conf: float | None) -> str:
     )
 
 
-def _programme_cell(inv: Investigation) -> str:
+def _programme_cell(inv: Investigation, gui_bases: dict) -> str:
     """Link-status cell (plan-20261002-1929Z): the declared
     obligation and how it stands — linked id, flagged debt,
     discharged, or no obligation."""
     if not inv.requires_programme:
         return '<span class="muted">—</span>'
     if inv.linked_programme_id:
-        return (
-            f'<span class="mono">{escape(inv.linked_programme_id)}'
-            "</span>"
-        )
+        return link_id(inv.linked_programme_id, gui_bases)
     if inv.obligation_discharge:
         return '<span class="muted">discharged</span>'
     return (
@@ -47,7 +44,9 @@ def _programme_cell(inv: Investigation) -> str:
     )
 
 
-def _inv_row(inv: Investigation, store: SearchStore) -> str:
+def _inv_row(
+    inv: Investigation, store: SearchStore, gui_bases: dict
+) -> str:
     findings = store.list_findings(inv.id)
     refs = store.list_evidence_refs(inv.id)
     minted = sum(1 for f in findings if f.claim_id)
@@ -61,20 +60,22 @@ def _inv_row(inv: Investigation, store: SearchStore) -> str:
         f'<td><span class="status status-{escape(inv.status.value)}">'
         f"{escape(inv.status.value)}</span></td>"
         f"<td>{escape(verdict)}</td>"
-        f"<td>{_programme_cell(inv)}</td>"
+        f"<td>{_programme_cell(inv, gui_bases)}</td>"
         f"<td>{len(refs)}</td><td>{len(findings)}</td><td>{minted}</td>"
         f"<td>{format_timestamp(inv.created_at)}</td>"
         "</tr>"
     )
 
 
-def _inv_table(invs: list[Investigation], store: SearchStore) -> str:
+def _inv_table(
+    invs: list[Investigation], store: SearchStore, gui_bases: dict
+) -> str:
     if not invs:
         return (
             '<div class="empty-state"><p>No investigations yet.</p>'
             "<p>They arrive via <code>open_investigation</code>.</p></div>"
         )
-    rows = "".join(_inv_row(i, store) for i in invs)
+    rows = "".join(_inv_row(i, store, gui_bases) for i in invs)
     return (
         "<table><thead><tr>"
         "<th>Question</th><th>ID</th><th>Status</th><th>Verdict</th>"
@@ -86,7 +87,8 @@ def _inv_table(invs: list[Investigation], store: SearchStore) -> str:
 
 
 def render_investigation_list(
-    store: SearchStore, view: str = "all"
+    store: SearchStore, view: str = "all",
+    gui_bases: dict | None = None,
 ) -> HTMLResponse:
     """Landing page: stats, status tabs, investigations table."""
     stats = store.stats()
@@ -119,7 +121,7 @@ def render_investigation_list(
         <span class="stat"><b>{stats['minted_claims']}</b> claims minted</span>
     </div>
     <div class="filter-tabs">{view_tabs}</div>
-    {_inv_table(invs, store)}
+    {_inv_table(invs, store, gui_bases or {})}
     """
     return HTMLResponse(render_base("Investigations", body))
 
@@ -207,8 +209,8 @@ def render_investigation_detail(
     if inv.requires_programme:
         if inv.linked_programme_id:
             obligation_line = (
-                '<p>programme obligation: <span class="mono">'
-                f'{escape(inv.linked_programme_id)}</span></p>'
+                '<p>programme obligation: '
+                f'{link_id(inv.linked_programme_id, gui_bases or {})}</p>'
             )
         elif inv.obligation_discharge:
             obligation_line = (

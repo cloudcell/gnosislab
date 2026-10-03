@@ -50,7 +50,9 @@ def create_observability_app(
 
     def index(request: Request) -> HTMLResponse:
         view = request.query_params.get("view", "all")
-        return inv_views.render_investigation_list(store, view)
+        return inv_views.render_investigation_list(
+            store, view, gui_bases=upstream_gui_bases or {},
+        )
 
     def investigation_detail(request: Request) -> HTMLResponse:
         return inv_views.render_investigation_detail(
