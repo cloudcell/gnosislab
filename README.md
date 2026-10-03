@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 MD041 MD001 -->
 <div align="center">
 
 # GnosisLab
@@ -10,8 +11,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/github/license/cloudcell/gnosislab)](LICENSE)
 
-
-[Install](#quick-start) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers)
+[Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers)
 
 </div>
 
@@ -96,6 +96,8 @@ Stop it:
 gnosislab stop all
 ```
 
+**Full documentation:** <https://loop.cloudcell.workers.dev/docs>
+
 ### Install from source
 
 ```bash
@@ -147,7 +149,7 @@ Each subsystem owns a distinct part of the research process rather than collapsi
 GnosisLab is composed of five MCP services.
 
 | Service | Role | Think of it as |
-|---|---|---|
+| --- | --- | --- |
 | **Episteme** | experiments, trials, observations and experimental state | the laboratory notebook |
 | **Anamnesis** | claims, evidence relationships and persistent research memory | the evidence graph |
 | **Zetesis** | search, investigation campaigns and evidence discovery | the investigator |
@@ -202,7 +204,7 @@ flowchart TB
 ### Default service ports
 
 | Service | GUI | MCP |
-|---|---:|---:|
+| --- | ---: | ---: |
 | Agora | `38051` | `38050` |
 | Arete | `38061` | `38060` |
 | Zetesis | `38071` | `38070` |
@@ -491,6 +493,8 @@ uv tool install gnosislab
 gnosislab start all
 gnosislab status
 ```
+
+Documentation: <https://loop.cloudcell.workers.dev/docs>
 
 PyPI: <https://pypi.org/project/gnosislab/>
 
