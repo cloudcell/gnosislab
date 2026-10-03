@@ -13,8 +13,55 @@ on:
     tags: ["v*"]
 
 jobs:
+  # Same gate as ci.yml — a tag can never publish a tree whose suite
+  # fails on any supported Python.
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install project
+        working-directory: ml-scientist
+        run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
+
+      - name: Run tests
+        working-directory: ml-scientist
+        run: uv run --python ${{ matrix.python-version }} pytest -q
+
   publish:
     name: Publish to PyPI
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: pypi
