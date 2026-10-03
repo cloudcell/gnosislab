@@ -1,0 +1,45 @@
+name: Publish
+
+# Trusted publishing (PyPI OIDC): no API token anywhere — PyPI issues a
+# short-lived credential to this workflow only, for this repo, this file,
+# and the "pypi" environment. Register the publisher at
+# https://pypi.org/manage/project/gnosislab/settings/publishing/
+# (owner: cloudcell, repo: gnosislab, workflow: publish.yml,
+# environment: pypi) and create a "pypi" environment in the repo's
+# GitHub settings — optionally with required reviewers so a tag push
+# alone can't ship a release.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/gnosislab
+    permissions:
+      id-token: write  # OIDC for trusted publishing + attestations
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Check tag matches project version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -1)"
+          [ "$tag" = "$ver" ] || {
+            echo "tag v$tag but pyproject.toml says $ver" >&2; exit 1; }
+
+      - name: Build distribution
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
