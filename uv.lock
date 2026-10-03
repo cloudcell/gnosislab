@@ -279,9 +279,10 @@ wheels = [
 
 [[package]]
 name = "gnosislab"
-version = "0.1.0"
+version = "0.1.15"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "mcp" },
     { name = "pydantic" },
 ]
@@ -294,12 +295,12 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest-xdist" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "mcp", specifier = ">=2.0.1" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -308,10 +309,7 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pytest-xdist", specifier = ">=3.5" },
-]
+dev = [{ name = "pytest-xdist", specifier = ">=3.5" }]
 
 [[package]]
 name = "h11"
