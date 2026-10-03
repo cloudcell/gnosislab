@@ -91,6 +91,22 @@ def _write_manifest(
         json.dump(manifest, f, indent=2)
 
 
+def _deny_content_fd() -> int:
+    """An inheritable anonymous fd holding the deny payload.
+
+    memfd where the build provides it — some CPython builds (the uv
+    3.10 distributions) lack os.memfd_create; an unlinked tempfile is
+    the same anonymous, already-deleted fd for bwrap's --bind-data."""
+    if hasattr(os, "memfd_create"):
+        fd = os.memfd_create("sealed-deny")
+    else:
+        fd, tmp = tempfile.mkstemp(prefix="sealed-deny-")
+        os.unlink(tmp)
+    os.write(fd, b"DENIED-BY-POLICY\n")
+    os.lseek(fd, 0, os.SEEK_SET)
+    return fd
+
+
 class LocalExecutor(ExecutorRole):
     """Execute Python code in a subprocess on the local machine.
 
@@ -508,9 +524,7 @@ class LocalExecutor(ExecutorRole):
                 # target. One fd serves every file deny (content is
                 # unreadable at mode 000 regardless).
                 if any(k == "file" for _, k in deny_paths):
-                    deny_fd = os.memfd_create("sealed-deny")
-                    os.write(deny_fd, b"DENIED-BY-POLICY\n")
-                    os.lseek(deny_fd, 0, os.SEEK_SET)
+                    deny_fd = _deny_content_fd()
 
             # Seal pre-flight: each overlay bind-mounts staged bytes
             # over the original path, and bwrap cannot create a missing

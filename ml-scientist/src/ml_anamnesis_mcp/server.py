@@ -72,7 +72,7 @@ def create_server(
                     ),
                     tool_deadline,
                 )
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 from .tools.schemas import fail
                 return fail(json.dumps({
                     "error": (

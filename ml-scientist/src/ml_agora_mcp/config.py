@@ -20,6 +20,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
+
 DEFAULTS: dict[str, Any] = {
     "db_dir": str(Path.home() / ".ml-agora"),
     "transport": "stdio",
@@ -53,8 +58,6 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     path = find_config_file(config_path)
     if path is not None:
         try:
-            import tomllib
-
             with open(path, "rb") as f:
                 config.update(tomllib.load(f))
         except Exception:

@@ -312,7 +312,7 @@ async def run_connectivity_supervisor(
             await asyncio.wait_for(
                 spec.adaptor.connect(), probe_timeout_seconds
             )
-        except TimeoutError:
+        except asyncio.TimeoutError:
             spec.mark_down(
                 "connect timed out — upstream listening but "
                 "not answering"

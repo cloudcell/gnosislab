@@ -11,6 +11,11 @@ import asyncio
 
 import pytest
 
+try:
+    from exceptiongroup import ExceptionGroup  # Python < 3.11 backport
+except ModuleNotFoundError:
+    pass  # builtin on 3.11+
+
 from ml_episteme_mcp.clients.adaptor import (
     MCPAdaptor,
     run_claims_supervisor,

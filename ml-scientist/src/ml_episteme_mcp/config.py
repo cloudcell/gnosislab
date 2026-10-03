@@ -24,6 +24,11 @@ from .clients.adaptor import (
     StubOptimizer,
 )
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
+
 
 # --- Defaults ---
 
@@ -81,8 +86,6 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     path = find_config_file(config_path)
     if path is not None:
         try:
-            import tomllib
-
             with open(path, "rb") as f:
                 file_config = tomllib.load(f)
             config.update(file_config)

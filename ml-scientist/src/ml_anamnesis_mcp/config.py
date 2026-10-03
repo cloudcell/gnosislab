@@ -11,6 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
+
 
 def load_config() -> dict[str, Any]:
     """Read the full anamnesis config file (./ml-anamnesis.toml, then
@@ -22,8 +27,6 @@ def load_config() -> dict[str, Any]:
         if not candidate.exists():
             continue
         try:
-            import tomllib
-
             with open(candidate, "rb") as f:
                 return tomllib.load(f)
         except Exception:
