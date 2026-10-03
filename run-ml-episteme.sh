@@ -5,12 +5,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 set -a
 source ./ports.env
-# Optional token for the artifact-ingest surface — secrets live in
-# ingest.env (gitignored), never in ports.env. If unset and an ingest
-# port is configured, the server refuses to start the listener.
-if [ -f ./ingest.env ]; then
-    source ./ingest.env
+# Token for the artifact-ingest surface — a per-deployment credential
+# stored in ingest.env (gitignored), never in ports.env. The file is
+# minted on first start with a fresh random token, mode 600; each
+# deployment owns its own credential so rotating one never affects
+# another. An empty/absent token leaves the surface off — the server
+# refuses to run it unauthenticated.
+if [ ! -f ./ingest.env ]; then
+    ( umask 077; \
+      echo "ML_EPISTEME_INGEST_TOKEN=$(openssl rand -hex 24)" \
+      > ./ingest.env )
+    echo "episteme: minted new ingest token in ./ingest.env" >&2
 fi
+chmod 600 ./ingest.env
+source ./ingest.env
 set +a
 
 # Execution-integrity prerequisites. The default sandbox mode is
