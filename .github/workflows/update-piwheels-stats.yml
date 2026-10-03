@@ -1,0 +1,67 @@
+name: Update piwheels stats
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # once daily, 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch piwheels stats
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          PACKAGE = "gnosislab"
+          URL = "https://www.piwheels.org/packages.json"
+
+          with urllib.request.urlopen(URL, timeout=120) as r:
+              packages = json.load(r)
+
+          for row in packages:
+              if row[0].lower() == PACKAGE.lower():
+                  downloads_30_days = row[1]
+                  downloads_all_time = row[2]
+                  break
+          else:
+              raise SystemExit(f"{PACKAGE} not found in piwheels data")
+
+          Path("stats").mkdir(exist_ok=True)
+
+          output = {
+              "downloads": downloads_all_time,
+              "downloads_30_days": downloads_30_days
+          }
+
+          Path("stats/piwheels.json").write_text(
+              json.dumps(output, indent=2) + "\n"
+          )
+
+          print(output)
+          PY
+
+      - name: Commit updated stats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add stats/piwheels.json
+
+          if git diff --cached --quiet; then
+            echo "No change"
+            exit 0
+          fi
+
+          git commit -m "chore: update piwheels download stats"
+          git push
