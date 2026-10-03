@@ -3,13 +3,14 @@
 *.pyo
 __pycache__/
 *.egg-info/
+.eggs/
 build/
 dist/
 
 # envs / secrets
 .env
 *.env
-!ml-scientist/ports.env
+!ports.env
 .venv/
 .venv
 
@@ -18,11 +19,18 @@ dist/
 .ruff_cache/
 .mypy_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # runtime state
 *.db
+.ml-episteme-data/
 nohup.out
+
+# local-only outputs
+scripts/mcp_probe_report.*
+diagnostics/out/
+sxport/
 
 # editors / os
 .idea/
@@ -35,10 +43,6 @@ nohup.out
 /docs
 /.devin
 /AGENTS.md
-ml-scientist/docs
-ml-scientist/.devin
-ml-scientist/AGENTS.md
-ml-scientist/papers
-ml-scientist/legal
-ml-scientist/test-tasks
-
+/papers
+/legal
+/test-tasks

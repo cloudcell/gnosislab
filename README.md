@@ -382,19 +382,23 @@ A researcher can inspect intermediate claims, evidence, trial outcomes and servi
 
 ```text
 gnosislab/
-├── ml-scientist/       # scientific experiment MCP stack
+├── src/                # gnosislab CLI + five ml_*_mcp packages
+├── tests/              # test suite (pytest-xdist)
+├── constants/          # grounded-constants registry + disclosure
+├── diagnostics/        # diagnostics corpus
 ├── gnosislab           # lifecycle CLI entry point
 ├── labloop             # transition compatibility symlink
+├── ml-*.toml           # per-server config
+├── ports.env           # port assignments
 ├── pyproject.toml      # distribution metadata
 ├── LICENSE
 ├── NOTICE
 └── README.md
 ```
 
-`ml-scientist/` can also be run independently:
+The repository root is the runnable project:
 
 ```bash
-cd ml-scientist
 uv sync
 ```
 
@@ -405,13 +409,13 @@ uv sync
 Per-service configuration lives under:
 
 ```text
-ml-scientist/ml-*.toml
+ml-*.toml
 ```
 
 Port configuration:
 
 ```text
-ml-scientist/ports.env
+ports.env
 ```
 
 User overrides:
