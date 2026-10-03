@@ -7,6 +7,7 @@
 
 **Turn hypotheses into experiments, experiments into evidence, and evidence into auditable conclusions.**
 
+[![CI](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/gnosislab?label=PyPI)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/github/license/cloudcell/gnosislab)](LICENSE)

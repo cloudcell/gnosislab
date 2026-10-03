@@ -1,0 +1,36 @@
+name: Research workflow
+description: Describe a real research workflow GnosisLab should support
+title: "[Workflow]: "
+labels: ["research-workflow"]
+body:
+  - type: input
+    id: domain
+    attributes:
+      label: Research domain
+      placeholder: "e.g. machine learning, cheminformatics, computational biology"
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workflow
+      description: How is this research performed today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence and artifacts
+      description: What must be retained for the result to be defensible?
+
+  - type: textarea
+    id: desired
+    attributes:
+      label: Desired GnosisLab workflow

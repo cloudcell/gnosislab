@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use GnosisLab in research, please cite the software."
+title: "GnosisLab"
+type: software
+authors:
+  - name: "Alexander Bikeyev"
+repository-code: "https://github.com/cloudcell/gnosislab"
+url: "https://loop.cloudcell.workers.dev/docs"
+license: Apache-2.0
+keywords:
+  - artificial intelligence
+  - scientific method
+  - research automation
+  - AI agents
+  - reproducibility
+  - provenance
+  - Model Context Protocol
