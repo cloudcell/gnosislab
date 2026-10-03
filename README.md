@@ -11,7 +11,7 @@
 [![PyPI](https://img.shields.io/pypi/v/gnosislab?label=PyPI)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/github/license/cloudcell/gnosislab)](LICENSE)
-<a href="https://discord.gg/v9JVtpVuUT"><img src="https://loop.cloudcell.workers.dev/assets/discord-icon.svg" alt="Join the Discord community" height="20" valign="middle"></a>
+[![Discord](https://img.shields.io/discord/903850592957517835?logo=discord&label=Discord)](https://discord.com/invite/v9JVtpVuUT)
 
 [Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers) · [Discord](https://discord.gg/v9JVtpVuUT)
 
