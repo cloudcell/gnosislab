@@ -12,6 +12,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab)](https://pypi.org/project/gnosislab/)
 [![License](https://img.shields.io/github/license/cloudcell/gnosislab)](LICENSE)
 [![piwheel downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcloudcell%2Fgnosislab%2Fmaster%2Fstats%2Fpiwheels.json&query=%24.downloads&label=piwheels%20downloads&color=blue)](https://www.piwheels.org/project/gnosislab/)
+[![PyPI Stats](/api/badges/gnosislab?period=month)](/packages/gnosislab)
 [![Discord](https://img.shields.io/discord/903850592957517835?logo=discord&label=Discord)](https://discord.com/invite/v9JVtpVuUT)
 
 [Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers) · [Discord](https://discord.gg/v9JVtpVuUT)
