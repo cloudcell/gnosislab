@@ -29,7 +29,7 @@ DEFAULTS: dict[str, Any] = {
     "db_dir": str(Path.home() / ".ml-agora"),
     "transport": "stdio",
     "port": 38050,
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
 }
 
 

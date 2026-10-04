@@ -10,4 +10,3 @@ exec uv run ml-arete-mcp \
     --port "${ML_ARETE_PORT}" \
     --stateless \
     --observability-port "${ML_ARETE_GUI_PORT}" \
-    --log-tool-args

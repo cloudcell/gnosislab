@@ -40,7 +40,6 @@ args=(
     --port "${ML_EPISTEME_PORT}"
     --stateless
     --observability-port "${ML_EPISTEME_GUI_PORT}"
-    --log-tool-args
 )
 # Ingest is enabled iff a token is configured — the token is the
 # switch, not the port. ports.env always carries the port; without

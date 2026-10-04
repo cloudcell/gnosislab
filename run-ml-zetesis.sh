@@ -10,4 +10,3 @@ exec uv run ml-zetesis-mcp \
     --port "${ML_ZETESIS_PORT}" \
     --stateless \
     --observability-port "${ML_ZETESIS_GUI_PORT}" \
-    --log-tool-args

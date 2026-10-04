@@ -154,7 +154,7 @@ Examples:
     parser.add_argument(
         "--host",
         default=None,
-        help="Host to bind for HTTP transport (default: 0.0.0.0)",
+        help="Host to bind for HTTP transport (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--db-path",

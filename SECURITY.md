@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-ML-Scientist is currently alpha software.
+GnosisLab is currently alpha software.
 
 At this stage, security fixes are generally applied to the current development
 version only. Formal long-term support policies may be introduced after the
@@ -26,7 +26,7 @@ alex@cloudcell.nz
 Suggested subject:
 
 ```text
-ML-Scientist Security Report
+GnosisLab Security Report
 ```
 
 Please include as much detail as reasonably possible:
@@ -34,7 +34,7 @@ Please include as much detail as reasonably possible:
 - affected version, commit, or branch
 - operating system and Python version
 - which server or component is affected (anamnesis, episteme, zetesis,
-  arete, agora, or labloop tooling)
+  arete, agora, or gnosislab tooling)
 - steps to reproduce
 - proof-of-concept input, MCP request, file, or command if available
 - expected behavior
@@ -44,7 +44,7 @@ Please include as much detail as reasonably possible:
 
 ## Response Expectations
 
-ML-Scientist is an early-stage project, so response times are best effort.
+GnosisLab is an early-stage project, so response times are best effort.
 
 The intended process is:
 
@@ -66,7 +66,7 @@ Security-relevant issues may include, but are not limited to:
 - exposure of credentials, environment variables, or local files
 - cross-server privilege escalation between trusted and untrusted components
 - denial-of-service issues caused by malformed MCP requests
-- dependency vulnerabilities with practical impact on ML-Scientist
+- dependency vulnerabilities with practical impact on GnosisLab
 
 ## Out of Scope
 
@@ -79,7 +79,7 @@ security impact:
   validation flaw
 - reports generated only by automated scanners without analysis
 - social engineering or phishing
-- risks inherent to running ML-Scientist inside a properly deployed LabLoop
+- risks inherent to running GnosisLab inside a properly deployed LabLoop
   environment that are already documented in the LabLoop security manual
 
 ## Coordinated Disclosure
@@ -89,5 +89,5 @@ reported vulnerabilities before public disclosure.
 
 ## No Warranty
 
-ML-Scientist is provided without warranty. See the project license for full
+GnosisLab is provided without warranty. See the project license for full
 terms.

@@ -10,4 +10,3 @@ exec uv run ml-anamnesis-mcp \
     --port "${ML_ANAMNESIS_PORT}" \
     --stateless \
     --observability-port "${ML_ANAMNESIS_GUI_PORT}" \
-    --log-tool-args

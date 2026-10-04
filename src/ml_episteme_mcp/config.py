@@ -37,7 +37,7 @@ DEFAULTS: dict[str, Any] = {
     "db_path": str(Path.home() / ".ml-episteme" / "state.db"),
     "transport": "stdio",
     "port": 38080,
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     # Recurrent protocol ships enabled (plan-20260926-0438Z):
     # mutating tools require a status digest read within the TTL;
     # violations gate writes until acknowledged. Set

@@ -28,7 +28,7 @@ DEFAULTS: dict[str, Any] = {
     "db_path": str(Path.home() / ".ml-arete" / "improver.db"),
     "transport": "stdio",
     "port": 38060,
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     # Recurrent protocol ships enabled (plan-20260926-0438Z).
     "enforcement": {
         "recurrent_protocol": True,

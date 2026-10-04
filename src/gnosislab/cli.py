@@ -336,7 +336,6 @@ def start_one(name: str) -> int:
         "--port", str(mcp),
         "--stateless",
         "--observability-port", str(gui),
-        "--log-tool-args",
     ]
     # Ingest is enabled iff a token is configured (fail closed,
     # same as run-ml-episteme.sh).

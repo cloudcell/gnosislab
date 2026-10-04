@@ -11,4 +11,3 @@ exec uv run ml-agora-mcp \
     --port "${ML_AGORA_PORT}" \
     --stateless \
     --observability-port "${ML_AGORA_GUI_PORT}" \
-    --log-tool-args
