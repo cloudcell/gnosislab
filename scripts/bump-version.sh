@@ -28,6 +28,30 @@ for arg in "$@"; do
   esac
 done
 
+# ── preflight: clean + synced tree ────────────────────────────────
+# The bump commit must contain ONLY the version change — refuse to
+# run while work is staged, modified, untracked, or unpushed, since
+# `git add` would otherwise sweep it silently into the release.
+if [ "$GIT" -eq 1 ]; then
+  dirty="$(git -C "$ROOT" status --porcelain)"
+  if [ -n "$dirty" ]; then
+    echo "bump: working tree is not clean — commit, stash, or ignore:" >&2
+    echo "$dirty" >&2
+    exit 1
+  fi
+  git -C "$ROOT" fetch -q origin
+  if ! counts="$(git -C "$ROOT" rev-list --left-right --count HEAD...@{u} 2>/dev/null)"; then
+    echo "bump: HEAD has no upstream — push it before bumping" >&2; exit 1
+  fi
+  ahead="${counts%%[[:space:]]*}"
+  behind="${counts##*[[:space:]]}"
+  if [ "$ahead" != "0" ] || [ "$behind" != "0" ]; then
+    echo "bump: branch is ahead=$ahead behind=$behind vs upstream —" >&2
+    echo "      push/pull to sync before bumping" >&2
+    exit 1
+  fi
+fi
+
 # ── compute new version ───────────────────────────────────────────
 CUR="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$PYPROJECT" | head -1)"
 [ -n "$CUR" ] || {
@@ -57,7 +81,7 @@ grep -q "^version = \"$NEW\"$" "$PYPROJECT" || {
 
 # ── commit + tag ──────────────────────────────────────────────────
 if [ "$GIT" -eq 1 ]; then
-  git -C "$ROOT" add -A
+  git -C "$ROOT" add pyproject.toml uv.lock
   git -C "$ROOT" commit -qm "gnosislab $NEW"
   git -C "$ROOT" push -q origin HEAD
   git -C "$ROOT" tag "v$NEW"
