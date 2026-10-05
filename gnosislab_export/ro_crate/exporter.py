@@ -21,7 +21,7 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-from ..common.manifest import build_manifest
+from ..common.payload import write_payload
 from ..common.snapshot import Snapshot
 from ..common.validation import check as validate_snapshot
 from . import mapping as m
@@ -185,7 +185,7 @@ def build_graph(snapshot: Snapshot, issues: list[str]) -> list[dict]:
 
 
 def export_rocrate(
-    snapshot: Snapshot, out: str | Path, zip_crate: bool = False
+    snapshot: Snapshot, out: str | Path, zip_it: bool = False
 ) -> Path:
     issues = validate_snapshot(snapshot)
     graph = build_graph(snapshot, issues)
@@ -195,47 +195,13 @@ def export_rocrate(
     crate = out if out.suffix != ".zip" else out.with_suffix("")
     if crate.exists():
         shutil.rmtree(crate)
-    (crate / "payload" / "code").mkdir(parents=True)
-    (crate / "payload" / "artifacts").mkdir(parents=True)
-    (crate / "payload" / "results").mkdir(parents=True)
 
-    for s in snapshot.code_snippets:
-        (crate / m.code_path(s.code_hash, s.language)).write_text(s.code_text)
-    for a in snapshot.artifacts:
-        (crate / m.artifact_path(a.content_hash, a.filename)).write_bytes(
-            a.content
-        )
-    result_trials = {o.trial_id for o in snapshot.observations}
-    for tid in result_trials:
-        obs = [o for o in snapshot.observations if o.trial_id == tid]
-        (crate / m.results_path(tid)).write_text(
-            json.dumps(
-                {
-                    "trial_id": tid,
-                    "observations": [
-                        {
-                            "id": o.id,
-                            "metrics": o.metrics,
-                            "variance": o.variance,
-                            "created_at": o.created_at,
-                        }
-                        for o in obs
-                    ],
-                },
-                indent=2,
-            )
-        )
-
-    manifest = build_manifest(snapshot)
-    manifest["integrity_issues"] = issues
-    (crate / "payload" / "MANIFEST.json").write_text(
-        json.dumps(manifest, indent=2)
-    )
+    write_payload(snapshot, crate, issues)
     (crate / "ro-crate-metadata.json").write_text(
         json.dumps(descriptor, indent=2)
     )
 
-    if zip_crate:
+    if zip_it:
         zpath = out.with_suffix(".zip")
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(crate.rglob("*")):

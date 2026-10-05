@@ -713,11 +713,12 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
                                  health/logs/integrity trail into
                                  sxport/<UTC>-<slug>.tar.gz (prints path
                                  + sha256 — report these in the run log)
-  gnosislab export  <slug> --format ro-crate [--zip]
-                                 export the programme's provenance as an
-                                 RO-Crate (read-only; code/artifacts/
-                                 results + ro-crate-metadata.json)
-  gnosislab export  --full --format ro-crate [--zip]
+  gnosislab export  <slug> --format ro-crate|prov|jsonld [--zip]
+                                 export the programme's provenance
+                                 (read-only; payload/ + format metadata:
+                                 ro-crate-metadata.json, prov.json, or
+                                 export.jsonld)
+  gnosislab export  --full --format ro-crate|prov|jsonld [--zip]
                                  export the whole store's provenance
 
 names: anamnesis  episteme  zetesis  arete  agora

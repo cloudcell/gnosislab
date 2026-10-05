@@ -8,6 +8,7 @@ Collection, conclusion → AssessAction, executor → SoftwareApplication.
 
 from __future__ import annotations
 
+from ..common.paths import artifact_path, code_path, results_path
 from ..common.validation import redact
 from ..common.snapshot import (
     Artifact,
@@ -29,25 +30,6 @@ _STATUS_TO_ACTION_STATUS = {
     "planned": "http://schema.org/PotentialActionStatus",
     "pending": "http://schema.org/PotentialActionStatus",
 }
-
-
-def _lang_ext(language: str) -> str:
-    return {"python": ".py", "r": ".R", "julia": ".jl", "bash": ".sh"}.get(
-        language, ".txt"
-    )
-
-
-def code_path(code_hash: str, language: str) -> str:
-    return f"payload/code/{code_hash}{_lang_ext(language)}"
-
-
-def artifact_path(content_hash: str, filename: str) -> str:
-    safe = filename.replace("/", "_")
-    return f"payload/artifacts/{content_hash}_{safe}"
-
-
-def results_path(trial_id: str) -> str:
-    return f"payload/results/{trial_id}.json"
 
 
 def map_programme(p: Programme) -> dict:

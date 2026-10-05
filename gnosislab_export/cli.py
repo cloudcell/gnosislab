@@ -48,14 +48,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    if args.format != "ro-crate":
-        print(
-            f"export: format '{args.format}' lands via its own plan — "
-            "only 'ro-crate' is implemented",
-            file=sys.stderr,
-        )
-        return 2
-
     try:
         snapshot = load_snapshot(
             episteme_db=args.episteme_db,
@@ -68,10 +60,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"export: {e}", file=sys.stderr)
         return 1
 
-    from .ro_crate.exporter import export_rocrate
+    if args.format == "ro-crate":
+        from .ro_crate.exporter import export_rocrate as export
+
+    elif args.format == "prov":
+        from .prov.exporter import export_prov as export
+
+    else:
+        from .jsonld.exporter import export_jsonld as export
 
     try:
-        path = export_rocrate(snapshot, Path(args.out), zip_crate=args.zip)
+        path = export(snapshot, Path(args.out), zip_it=args.zip)
     except Exception as e:
         print(f"export: {e}", file=sys.stderr)
         return 1

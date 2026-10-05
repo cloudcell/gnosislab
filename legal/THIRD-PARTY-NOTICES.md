@@ -50,8 +50,7 @@ license-text requirements apply to that bundled copy.
 - License: **W3C Document License**; royalty-free patent commitments under
   the W3C Patent Policy
 - Copyright: W3C / PROV Working Group
-- Used by: `gnosislab_export/prov/` (planned; namespace terms referenced by
-  URI)
+- Used by: `gnosislab_export/prov/` (namespace terms referenced by URI)
 
 ### schema.org vocabulary
 

@@ -1,4 +1,1 @@
-"""Bare JSON-LD emitter — placeholder.
-
-Lands via its own e-plan; reads the same common.Snapshot.
-"""
+"""Bare JSON-LD emitter — same schema.org graph, no crate wrapper."""
