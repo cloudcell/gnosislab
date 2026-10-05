@@ -78,29 +78,45 @@ or:
 pip install gnosislab
 ```
 
-Then start the full stack:
+### Full setup example
+
+Register the five servers with your MCP client, then start the stack:
 
 ```bash
+# see which clients are supported, preview without writing
+gnosislab setup --list
+gnosislab setup claude-code --dry-run    # or opencode, vscodium, vscode,
+                                         # windsurf, cursor
+
+# merge the server entries into the client's MCP config
+gnosislab setup claude-code
+
+# background all five servers (upstreams first)
 gnosislab start all
-```
 
-Check it:
-
-```bash
+# pid/ports/health per server
 gnosislab status
-```
 
-Inspect resolved configuration:
-
-```bash
+# resolved ports + config file path
 gnosislab config
-```
 
-Stop it:
+# tail one server's log
+gnosislab logs episteme
 
-```bash
+# open the lab status dashboard in your browser (agora by default)
+gnosislab dashboard            # → ML_AGORA_GUI_URL (default http://localhost:38051)
+gnosislab dashboard episteme   # any server's GUI works too
+
+# stop everything (consumers first)
 gnosislab stop all
 ```
+
+Ports resolve as: built-in defaults < `~/.config/gnosislab/ports.env` <
+environment variables — same `KEY=VALUE` format as the repo's
+`ports.env`. Runtime state always lives in `~/.ml-<name>/`, regardless
+of install method. The dashboard URL comes from the resolved
+`ML_<NAME>_GUI_URL`, so remote/VM setups can point it at a reachable
+host without editing scripts.
 
 **Full documentation:** <https://loop.cloudcell.workers.dev/docs>
 
@@ -553,10 +569,12 @@ Apache License 2.0. See [`LICENSE`](LICENSE).
 
 <div align="center">
 
-### Make the experiment part of the program.
+### Stop collecting runs. Start running programmes.
 
-**GnosisLab**
+```bash
+pip install gnosislab
+```
 
-<https://github.com/cloudcell/gnosislab>
+**[GnosisLab](https://github.com/cloudcell/gnosislab)** — hypothesis in, auditable conclusion out.
 
 </div>

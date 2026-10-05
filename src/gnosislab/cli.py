@@ -433,6 +433,23 @@ def _resolve(target: str) -> list[str]:
     sys.exit(2)
 
 
+def _dashboard(name: str) -> int:
+    """Open a server's observability GUI in a browser.
+
+    The URL is ML_<NAME>_GUI_URL from the resolved env (defaults <
+    ~/.config/gnosislab/ports.env < process env) — remote/VM users
+    point it at their gateway; locally it is http://localhost:<gui>.
+    """
+    import webbrowser
+
+    url = _var(name, "GUI_URL")
+    if webbrowser.open(url):
+        print(f"{name}: opened {url}")
+    else:
+        print(f"{name}: {url}  (no browser found — open manually)")
+    return 0
+
+
 def _logs(name: str) -> int:
     log = _home(name) / "logs" / "server.log"
     if not log.is_file():
@@ -478,6 +495,8 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
   gnosislab restart [name|all]
   gnosislab status  [name|all]   pid/ports/health per server (default: all)
   gnosislab logs    <name>       follow ~/.ml-<name>/logs/server.log
+  gnosislab dashboard [name]     open the server's GUI in a browser
+                                 (default: agora — the lab status hub)
   gnosislab config               show resolved ports + config file path
   gnosislab setup   <tool>       merge the five servers into a client's
                                  MCP config (opencode, vscodium, vscode,
@@ -522,6 +541,11 @@ def main() -> None:
             sys.exit(2)
         _resolve(target)
         sys.exit(_logs(target))
+    if cmd in ("dashboard", "gui"):
+        if target == "all":
+            target = "agora"
+        _resolve(target)
+        sys.exit(_dashboard(target))
     if cmd == "config":
         sys.exit(_config())
     if cmd == "setup":

@@ -62,6 +62,26 @@ mcp_port() {
     esac
 }
 
+gui_url() {
+    # ML_<NAME>_GUI_URL comes from ports.env (derived from the GUI
+    # port; pre-set it in the environment for remote browsers/VMs).
+    local v="ML_$(echo "$1" | tr '[:lower:]' '[:upper:]')_GUI_URL"
+    echo "${!v}"
+}
+
+dashboard() {
+    # Open a server's observability GUI in a browser; defaults to
+    # agora — the lab status hub.
+    local name=${1:-agora} url
+    url=$(gui_url "$name")
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$url" >/dev/null 2>&1 &
+        echo "$name: opened $url"
+    else
+        echo "$name: $url  (no xdg-open — open manually)"
+    fi
+}
+
 gui_port() {
     case "$1" in
         episteme) echo "$ML_EPISTEME_GUI_PORT" ;;
@@ -290,6 +310,9 @@ gnosislab — lifecycle for the ml-* loop stack.
   gnosislab restart [name|all]
   gnosislab status  [name|all]   pid/ports/health per server (default: all)
   gnosislab logs    <name>       tail -f ~/.ml-<name>/logs/server.log
+  gnosislab dashboard [name]     open the server's GUI in a browser
+                                 (default: agora — the lab status hub;
+                                 URL from ports.env ML_<NAME>_GUI_URL)
   gnosislab export  <slug>       package diagnostics/out/<slug>/ + server
                                  health/logs/integrity trail into
                                  sxport/<UTC>-<slug>.tar.gz (prints path
@@ -333,6 +356,11 @@ case "$cmd" in
         [ "$target" = "all" ] && { usage >&2; exit 2; }
         resolve "$target" >/dev/null
         exec tail -f "$(home_dir "$target")/logs/server.log"
+        ;;
+    dashboard|gui)
+        [ "$target" = "all" ] && target=agora
+        resolve "$target" >/dev/null
+        dashboard "$target"
         ;;
     export)
         export_one "$target" "${@:3}"
