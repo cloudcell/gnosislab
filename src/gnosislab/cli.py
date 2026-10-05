@@ -612,6 +612,57 @@ def _export(argv: list[str]) -> int:
     return 0
 
 
+def _version() -> int:
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        print(f"gnosislab {version('gnosislab')}")
+    except PackageNotFoundError:
+        print("gnosislab (uninstalled source tree)")
+    return 0
+
+
+def _upgrade() -> int:
+    """Upgrade the CLI itself to the latest release.
+
+    Delegates to whichever installer owns this installation:
+      uv tool          → uv tool upgrade gnosislab
+      pipx             → pipx upgrade gnosislab
+      editable/source  → git pull --rebase && uv sync — in a checkout
+                         PyPI is downstream of the tree, not upstream
+      pip              → python -m pip install -U gnosislab
+    """
+    from importlib.metadata import distribution
+
+    editable = False
+    try:
+        direct = json.loads(
+            distribution("gnosislab").read_text("direct_url.json")
+            or "{}")
+        editable = bool(direct.get("dir_info", {}).get("editable"))
+    except Exception:
+        pass
+
+    if "uv/tools" in sys.prefix or "uv\\tools" in sys.prefix:
+        steps = [["uv", "tool", "upgrade", "gnosislab"]]
+    elif "pipx" in sys.prefix:
+        steps = [["pipx", "upgrade", "gnosislab"]]
+    elif editable:
+        print("gnosislab: source checkout — upgrading means pulling "
+              "git, not installing from PyPI")
+        steps = [["git", "pull", "--rebase"], ["uv", "sync"]]
+    else:
+        steps = [[sys.executable, "-m", "pip", "install", "-U",
+                  "gnosislab"]]
+
+    for cmd in steps:
+        print(f"gnosislab: {' '.join(cmd)}")
+        rc = subprocess.run(cmd).returncode
+        if rc != 0:
+            return rc
+    _version()
+    return 0
+
+
 USAGE = """gnosislab — lifecycle for the ml-* loop stack.
 (`labloop` is a transition alias to this command — same thing.)
 
@@ -623,6 +674,9 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
   gnosislab dashboard [name]     open the server's GUI in a browser
                                  (default: agora — the lab status hub)
   gnosislab config               show resolved ports + config file path
+  gnosislab version              print the installed CLI version
+  gnosislab upgrade              upgrade the CLI itself — uv tool / pipx /
+                                 pip, or git pull in a source checkout
   gnosislab setup   <tool>       merge the five servers into a client's
                                  MCP config (opencode, vscodium, vscode,
                                  windsurf, cursor, claude-code, devin);
@@ -665,6 +719,10 @@ def main() -> None:
     if cmd in ("-h", "--help", "help"):
         print(USAGE)
         sys.exit(0)
+    if cmd in ("-V", "--version", "version"):
+        sys.exit(_version())
+    if cmd == "upgrade":
+        sys.exit(_upgrade())
     if cmd in ("start", "stop", "status"):
         rc = 0
         for n in _resolve(target):
