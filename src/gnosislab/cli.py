@@ -644,8 +644,12 @@ def _upgrade() -> int:
       pipx             → pipx upgrade gnosislab
       editable/source  → git pull --rebase && uv sync — in a checkout
                          PyPI is downstream of the tree, not upstream
-      pip              → python -m pip install -U gnosislab
+      pip venv         → python -m pip install -U gnosislab
+      uv venv          → uv pip install --python <exe> -U gnosislab
+                         (uv venvs ship no pip module by design)
     """
+    import importlib.util
+    import shutil
     from importlib.metadata import distribution
 
     editable = False
@@ -665,9 +669,18 @@ def _upgrade() -> int:
         print("gnosislab: source checkout — upgrading means pulling "
               "git, not installing from PyPI")
         steps = [["git", "pull", "--rebase"], ["uv", "sync"]]
-    else:
+    elif importlib.util.find_spec("pip") is not None:
         steps = [[sys.executable, "-m", "pip", "install", "-U",
                   "gnosislab"]]
+    elif shutil.which("uv"):
+        steps = [["uv", "pip", "install", "--python", sys.executable,
+                  "-U", "gnosislab"]]
+    else:
+        print("gnosislab: can't self-upgrade — no pip module in this "
+              "environment and no uv on PATH; reinstall with "
+              "`uv tool install gnosislab` or `pip install gnosislab`",
+              file=sys.stderr)
+        return 1
 
     for cmd in steps:
         print(f"gnosislab: {' '.join(cmd)}")
