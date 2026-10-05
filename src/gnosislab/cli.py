@@ -1,8 +1,9 @@
-"""gnosislab — lifecycle for the ml-* loop stack (pip-installed CLI).
+"""gnosislab — lifecycle for the ml-* loop stack (single implementation).
 
-Mirrors the repo-local `gnosislab` bash script so the two tools
-manage the same state on the same host: servers run detached with
-stdout appended to ~/.ml-<name>/logs/server.log and a pidfile at
+This is the only implementation of the lifecycle commands — the
+repo-local `gnosislab` bash script is a thin shim that execs this
+CLI. Servers run detached with stdout appended to
+~/.ml-<name>/logs/server.log and a pidfile at
 ~/.ml-<name>/run/labloop.pid (the on-disk identifiers keep the
 labloop name until the subsystem is renamed).
 
@@ -489,7 +490,130 @@ def _config() -> int:
     return 0
 
 
+def _export(argv: list[str]) -> int:
+    """Package a diagnostic run, or export provenance.
+
+    Default (tarball): diagnostics/out/<slug>/ + per-server health,
+    log tails and integrity checks → sxport/<UTC>-<slug>.tar.gz.
+    --format ro-crate|… delegates to the gnosislab_export package,
+    which reads the stores read-only.
+    """
+    fmt, zip_flag, slug = "tarball", False, None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--format" and i + 1 < len(argv):
+            fmt = argv[i + 1]
+            i += 2
+        elif a == "--zip":
+            zip_flag = True
+            i += 1
+        elif a.startswith("-"):
+            print(f"gnosislab export: unknown flag '{a}'",
+                  file=sys.stderr)
+            return 2
+        elif slug is None:
+            slug = a
+            i += 1
+        else:
+            print(f"gnosislab export: unexpected arg '{a}'",
+                  file=sys.stderr)
+            return 2
+    if not slug:
+        print("gnosislab export: missing slug — expected "
+              "'gnosislab export <slug>'", file=sys.stderr)
+        return 2
+
+    if fmt != "tarball":
+        from gnosislab_export.cli import main as export_main
+        args = ["--programme", slug, "--format", fmt,
+                "--out", f"sxport/{slug}-rocrate"]
+        if zip_flag:
+            args.append("--zip")
+        return export_main(args)
+
+    if slug == "all" or "/" in slug or ".." in slug:
+        print(f"gnosislab export: bad slug '{slug}' — use a simple name "
+              "(e.g. the diagnostics filename without .md)",
+              file=sys.stderr)
+        return 2
+
+    import contextlib
+    import hashlib
+    import io
+    import shutil
+    import socket
+    import tarfile
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%MZ")
+    Path("sxport").mkdir(exist_ok=True)
+    stage = Path("sxport") / f"{stamp}-{slug}"
+    out = Path(f"{stage}.tar.gz")
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+
+    # Agent payload — required; a diagnostic that produced nothing
+    # exports nothing.
+    payload_src = Path("diagnostics") / "out" / slug
+    if payload_src.is_dir():
+        shutil.copytree(payload_src, stage / "payload")
+    else:
+        print(f"gnosislab export: warning — {payload_src} not found; "
+              "exporting server state only", file=sys.stderr)
+        (stage / "payload").mkdir()
+
+    # Per-server health snapshots + log tails + integrity check logs.
+    (stage / "health").mkdir()
+    (stage / "logs").mkdir()
+    (stage / "integrity").mkdir()
+    for name in COMPONENTS:
+        for tag, port_key, url_path in (
+            ("mcp-health", "PORT", "health"),
+            ("gui-deep", "GUI_PORT", "health/deep"),
+        ):
+            dest = stage / "health" / f"{name}-{tag}.json"
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{_var(name, port_key)}/{url_path}",
+                    timeout=3,
+                ) as r:
+                    dest.write_bytes(r.read())
+            except Exception:
+                dest.write_text('{"error":"unreachable"}')
+        log = _home(name) / "logs" / "server.log"
+        if log.is_file():
+            lines = log.read_text(errors="replace").splitlines(
+                keepends=True)
+            (stage / "logs" / f"{name}.log").write_text(
+                "".join(lines[-1000:]))
+        for f in sorted((_home(name) / "logs").glob("check-*.jsonl")):
+            shutil.copy2(f, stage / "integrity" / f"{name}-{f.name}")
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        for name in COMPONENTS:
+            status_one(name)
+    manifest = (
+        f"slug: {slug}\n"
+        f"exported_at: {datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%SZ}\n"
+        f"host: {socket.getfqdn()}\n"
+        "labloop_status:\n" + buf.getvalue()
+    )
+    (stage / "MANIFEST.txt").write_text(manifest)
+
+    with tarfile.open(out, "w:gz") as tar:
+        tar.add(stage, arcname=stage.name)
+    shutil.rmtree(stage)
+    digest = hashlib.sha256(out.read_bytes()).hexdigest()
+    print(f"{digest}  {out}")
+    print(f"bytes: {out.stat().st_size}")
+    print(f"export: {out}")
+    return 0
+
+
 USAGE = """gnosislab — lifecycle for the ml-* loop stack.
+(`labloop` is a transition alias to this command — same thing.)
 
   gnosislab start   [name|all]   background a server (upstreams first on all)
   gnosislab stop    [name|all]   terminate (consumers first on all)
@@ -503,8 +627,26 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
                                  MCP config (opencode, vscodium, vscode,
                                  windsurf, cursor, claude-code, devin);
                                  --list, --print, --dry-run, --only=…
+  gnosislab export  <slug>       package diagnostics/out/<slug>/ + server
+                                 health/logs/integrity trail into
+                                 sxport/<UTC>-<slug>.tar.gz (prints path
+                                 + sha256 — report these in the run log)
+  gnosislab export  <slug> --format ro-crate [--zip]
+                                 export the programme's provenance as an
+                                 RO-Crate (read-only; code/artifacts/
+                                 results + ro-crate-metadata.json)
 
 names: anamnesis  episteme  zetesis  arete  agora
+
+status shows each server as:
+  managed    — started via `gnosislab start`; tracked by pidfile
+               (~/.ml-<name>/run/labloop.pid), logs to
+               ~/.ml-<name>/logs/server.log, full lifecycle control.
+  unmanaged  — running but not started via gnosislab (e.g. run-ml-*.sh
+               in a terminal); detected by port probe. `stop` still
+               terminates it by resolving the listener pid, but its
+               stdout lives wherever it was launched and it leaves
+               no labloop log.
 
 ports: defaults < ~/.config/gnosislab/ports.env < environment.
 The file uses the same KEY=VALUE format as the repo's ports.env;
@@ -551,6 +693,8 @@ def main() -> None:
         sys.exit(_config())
     if cmd == "setup":
         sys.exit(_setup(sys.argv[2:]))
+    if cmd == "export":
+        sys.exit(_export(sys.argv[2:]))
 
     print(USAGE)
     sys.exit(2 if cmd else 0)
