@@ -313,6 +313,12 @@ gnosislab — lifecycle for the ml-* loop stack.
   gnosislab dashboard [name]     open the server's GUI in a browser
                                  (default: agora — the lab status hub;
                                  URL from ports.env ML_<NAME>_GUI_URL)
+  gnosislab config               show resolved ports + config file path
+  gnosislab setup   <tool>       merge the five servers into a client's
+                                 MCP config (opencode, vscodium, vscode,
+                                 windsurf, cursor, claude-code, devin);
+                                 --list, --print, --dry-run, --only=…
+                                 (delegates to the Python CLI)
   gnosislab export  <slug>       package diagnostics/out/<slug>/ + server
                                  health/logs/integrity trail into
                                  sxport/<UTC>-<slug>.tar.gz (prints path
@@ -365,8 +371,21 @@ case "$cmd" in
     export)
         export_one "$target" "${@:3}"
         ;;
+    config|setup)
+        # JSON merge / resolved-env display live in the Python CLI —
+        # delegate rather than reimplement JSON in bash.
+        if command -v uv >/dev/null 2>&1; then
+            exec uv run --quiet gnosislab "$cmd" "${@:2}"
+        elif command -v gnosislab >/dev/null 2>&1; then
+            exec gnosislab "$cmd" "${@:2}"
+        else
+            echo "gnosislab: '$cmd' needs the Python CLI" \
+                 "(uv in this checkout, or an installed gnosislab)" >&2
+            exit 2
+        fi
+        ;;
     *)
         usage
-        exit "${1:+2}"
+        if [ -n "$cmd" ]; then exit 2; else exit 0; fi
         ;;
 esac
