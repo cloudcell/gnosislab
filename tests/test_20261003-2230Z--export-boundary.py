@@ -219,6 +219,15 @@ def test_scope_required(stores):
         load_snapshot(epi, ana)
 
 
+def test_missing_scope_target_fails(stores):
+    # A miss must not export an empty crate that looks like success.
+    epi, ana = stores
+    with pytest.raises(ValueError, match="programme not found"):
+        load_snapshot(epi, ana, programme_id="prog-nonexistent")
+    with pytest.raises(ValueError, match="trial not found"):
+        load_snapshot(epi, ana, trial_id="trial-nonexistent")
+
+
 def test_secret_in_state_aborts_export(tmp_path, stores):
     epi, ana = stores
     conn = sqlite3.connect(epi)

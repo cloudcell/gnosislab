@@ -498,7 +498,7 @@ def _export(argv: list[str]) -> int:
     --format ro-crate|… delegates to the gnosislab_export package,
     which reads the stores read-only.
     """
-    fmt, zip_flag, slug = "tarball", False, None
+    fmt, zip_flag, slug, full = "tarball", False, None, False
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -507,6 +507,9 @@ def _export(argv: list[str]) -> int:
             i += 2
         elif a == "--zip":
             zip_flag = True
+            i += 1
+        elif a == "--full":
+            full = True
             i += 1
         elif a.startswith("-"):
             print(f"gnosislab export: unknown flag '{a}'",
@@ -519,15 +522,27 @@ def _export(argv: list[str]) -> int:
             print(f"gnosislab export: unexpected arg '{a}'",
                   file=sys.stderr)
             return 2
-    if not slug:
+    if full and slug:
+        print("gnosislab export: --full takes no slug", file=sys.stderr)
+        return 2
+    if not slug and not full:
         print("gnosislab export: missing slug — expected "
-              "'gnosislab export <slug>'", file=sys.stderr)
+              "'gnosislab export <slug>' (or --full --format …)",
+              file=sys.stderr)
         return 2
 
+    if full and fmt == "tarball":
+        print("gnosislab export: --full applies to provenance formats — "
+              "use '--full --format ro-crate'", file=sys.stderr)
+        return 2
     if fmt != "tarball":
         from gnosislab_export.cli import main as export_main
-        args = ["--programme", slug, "--format", fmt,
-                "--out", f"sxport/{slug}-rocrate"]
+        if full:
+            args = ["--full", "--format", fmt,
+                    "--out", "sxport/full-rocrate"]
+        else:
+            args = ["--programme", slug, "--format", fmt,
+                    "--out", f"sxport/{slug}-rocrate"]
         if zip_flag:
             args.append("--zip")
         return export_main(args)
@@ -689,6 +704,8 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
                                  export the programme's provenance as an
                                  RO-Crate (read-only; code/artifacts/
                                  results + ro-crate-metadata.json)
+  gnosislab export  --full --format ro-crate [--zip]
+                                 export the whole store's provenance
 
 names: anamnesis  episteme  zetesis  arete  agora
 

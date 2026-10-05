@@ -247,9 +247,15 @@ def load_snapshot(
 
     if trial_id:
         rows = epi.execute("SELECT * FROM trials WHERE id=?", (trial_id,)).fetchall()
+        if not rows:
+            raise ValueError(f"trial not found: {trial_id}")
         prog_ids = {r["programme_id"] for r in rows}
         trial_ids = {r["id"] for r in rows}
     elif programme_id:
+        if not epi.execute(
+            "SELECT 1 FROM programmes WHERE id=?", (programme_id,)
+        ).fetchone():
+            raise ValueError(f"programme not found: {programme_id}")
         prog_ids = {programme_id}
         trial_ids = {
             r[0]
