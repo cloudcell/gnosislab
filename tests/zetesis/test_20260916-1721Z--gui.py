@@ -15,7 +15,10 @@ def _get(url: str) -> tuple[int, str]:
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status, resp.read().decode()
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()
+        try:
+            return e.code, e.read().decode()
+        finally:
+            e.close()
 
 
 async def test_gui_index_and_detail(zetesis_http_server):

@@ -16,7 +16,10 @@ def _get(url: str, headers: dict | None = None) -> tuple[int, str]:
         with urllib.request.urlopen(req) as resp:
             return resp.status, resp.read().decode()
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()
+        try:
+            return e.code, e.read().decode()
+        finally:
+            e.close()
 
 
 async def _seed(url):

@@ -240,6 +240,21 @@ def load_snapshot(
     """
     epi_path = Path(episteme_db).expanduser()
     epi = open_ro(epi_path)
+    try:
+        return _load(
+            epi, epi_path,
+            Path(anamnesis_db).expanduser() if anamnesis_db else None,
+            programme_id, trial_id, full,
+        )
+    finally:
+        epi.close()
+
+
+def _load(epi, epi_path: Path, ana_path: Path | None,
+          programme_id: str | None, trial_id: str | None,
+          full: bool) -> Snapshot:
+    """The load_snapshot body over an already-open episteme
+    connection — the caller owns closing it."""
     _require_tables(epi, REQUIRED_EPISTEME_TABLES, str(epi_path))
 
     prog_ids: set[str] = set()
@@ -403,55 +418,55 @@ def load_snapshot(
             sorted(dr_ids),
         )
     )
-    epi.close()
 
     # Anamnesis: one-hop claims — claims whose edges point at an
     # exported entity id, plus their edges.
     claims: tuple[Claim, ...] = ()
     claim_edges: tuple[ClaimEdge, ...] = ()
-    ana_path = Path(anamnesis_db).expanduser() if anamnesis_db else None
     source_dbs = [epi_path.name]
     if ana_path and ana_path.is_file():
         ana = open_ro(ana_path)
-        _require_tables(ana, REQUIRED_ANAMNESIS_TABLES, str(ana_path))
-        exported_ids = set(prog_ids) | set(trial_ids) | {
-            h.id for h in hypotheses
-        } | {o.id for o in observations} | {c.id for c in conclusions}
-        edge_rows = ana.execute(
-            f"SELECT * FROM claim_edges WHERE to_ref IN ({ph(exported_ids)})",
-            sorted(exported_ids),
-        ).fetchall()
-        claim_ids = {r["from_claim"] for r in edge_rows}
-        # also pull edges FROM those claims to anything (full edge set
-        # for included claims — validation marks external refs)
-        edge_rows += ana.execute(
-            f"SELECT * FROM claim_edges WHERE from_claim IN ({ph(claim_ids)})",
-            sorted(claim_ids),
-        ).fetchall()
-        seen = set()
-        claim_edges = tuple(
-            e for e in (
-                ClaimEdge(
-                    id=r["id"], from_claim=r["from_claim"],
-                    to_ref=r["to_ref"], ref_type=r["ref_type"],
-                    relation=r["relation"],
-                )
-                for r in edge_rows
-            )
-            if not (e.id in seen or seen.add(e.id))
-        )
-        claims = tuple(
-            Claim(
-                id=r["id"], content=r["content"], type=r["type"],
-                confidence=r["confidence"], content_hash=r["content_hash"],
-                created_at=r["created_at"],
-            )
-            for r in ana.execute(
-                f"SELECT * FROM claims WHERE id IN ({ph(claim_ids)})",
+        try:
+            _require_tables(ana, REQUIRED_ANAMNESIS_TABLES, str(ana_path))
+            exported_ids = set(prog_ids) | set(trial_ids) | {
+                h.id for h in hypotheses
+            } | {o.id for o in observations} | {c.id for c in conclusions}
+            edge_rows = ana.execute(
+                f"SELECT * FROM claim_edges WHERE to_ref IN ({ph(exported_ids)})",
+                sorted(exported_ids),
+            ).fetchall()
+            claim_ids = {r["from_claim"] for r in edge_rows}
+            # also pull edges FROM those claims to anything (full edge set
+            # for included claims — validation marks external refs)
+            edge_rows += ana.execute(
+                f"SELECT * FROM claim_edges WHERE from_claim IN ({ph(claim_ids)})",
                 sorted(claim_ids),
+            ).fetchall()
+            seen = set()
+            claim_edges = tuple(
+                e for e in (
+                    ClaimEdge(
+                        id=r["id"], from_claim=r["from_claim"],
+                        to_ref=r["to_ref"], ref_type=r["ref_type"],
+                        relation=r["relation"],
+                    )
+                    for r in edge_rows
+                )
+                if not (e.id in seen or seen.add(e.id))
             )
-        )
-        ana.close()
+            claims = tuple(
+                Claim(
+                    id=r["id"], content=r["content"], type=r["type"],
+                    confidence=r["confidence"], content_hash=r["content_hash"],
+                    created_at=r["created_at"],
+                )
+                for r in ana.execute(
+                    f"SELECT * FROM claims WHERE id IN ({ph(claim_ids)})",
+                    sorted(claim_ids),
+                )
+            )
+        finally:
+            ana.close()
         source_dbs.append(ana_path.name)
 
     return Snapshot(
