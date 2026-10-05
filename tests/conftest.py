@@ -36,6 +36,46 @@ anyio.abc.BlockingPortal = anyio.from_thread.BlockingPortal
 os.environ.setdefault("ML_RECURRENT_PROTOCOL", "0")
 
 
+# --- Store connection cleanup ---
+#
+# Python 3.13+ warns when a sqlite3.Connection is garbage-collected
+# unclosed; pytest-unraisable promotes the warning to a failure (at
+# whichever test happens to run when GC fires — attribution is fuzzy).
+# Many tests open stores inline without closing. Track every store
+# that connects and close them all at teardown so the suite is
+# deterministic on 3.13+.
+
+
+@pytest.fixture(autouse=True)
+def _close_open_stores(monkeypatch):
+    tracked: list = []
+    specs = (
+        ("ml_episteme_mcp.state.store", "StateStore"),
+        ("ml_zetesis_mcp.state.store", "SearchStore"),
+        ("ml_arete_mcp.state.store", "ImproverStore"),
+        ("ml_anamnesis_mcp.state.store", "MemoryStore"),
+    )
+    for mod_name, cls_name in specs:
+        try:
+            cls = getattr(__import__(mod_name, fromlist=[cls_name]),
+                          cls_name)
+        except (ImportError, AttributeError):
+            continue
+        orig = cls.connect
+
+        def _tracked(self, *a, _orig=orig, **k):
+            tracked.append(self)
+            return _orig(self, *a, **k)
+
+        monkeypatch.setattr(cls, "connect", _tracked)
+    yield
+    for s in tracked:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
 # --- Port allocation ---
 
 
