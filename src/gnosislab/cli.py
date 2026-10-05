@@ -107,6 +107,7 @@ MCP_TOOLS = {
     "windsurf":    ("~/.codeium/windsurf/mcp_config.json", "mcpServers", "http"),
     "cursor":      ("~/.cursor/mcp.json", "mcpServers", "http"),
     "claude-code": ("~/.claude.json", "mcpServers", "http"),
+    "devin":       ("~/.config/devin/mcp_config.json", "mcpServers", "http"),
 }
 
 # Every container key any tool uses — `setup` sweeps our ml-*
@@ -500,7 +501,7 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
   gnosislab config               show resolved ports + config file path
   gnosislab setup   <tool>       merge the five servers into a client's
                                  MCP config (opencode, vscodium, vscode,
-                                 windsurf, cursor, claude-code);
+                                 windsurf, cursor, claude-code, devin);
                                  --list, --print, --dry-run, --only=…
 
 names: anamnesis  episteme  zetesis  arete  agora
