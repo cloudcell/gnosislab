@@ -528,6 +528,19 @@ Repository: <https://github.com/cloudcell/gnosislab>
 
 ---
 
+## Related projects
+
+**[LabLoop](https://github.com/cloudcell/labloop)** — a secure lab
+environment for running GnosisLab against untrusted, agent-generated code.
+It builds a VM partitioned into `driver`, `mcp` and `hostile` zones: the
+services and their stores live in the trusted `mcp` zone, the driving agent
+in `driver`, and experiment code executes only in `hostile`, returning
+results as inert data through a token-gated ingest surface. It is the
+containment model described in the GnosisLab architecture, packaged as a
+runnable environment.
+
+---
+
 ## Contributing
 
 GnosisLab is most useful when challenged by people who care about scientific rigor, agent engineering, reproducibility, provenance, evaluation and research infrastructure.
