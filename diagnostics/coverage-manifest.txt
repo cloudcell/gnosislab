@@ -77,6 +77,7 @@ programme://{id}/trials -> resource-surface
 programme://{id}/belief -> resource-surface
 programme://{id}/budget -> resource-surface
 trial://{trial_id}/artifacts -> resource-surface
+trial://{trial_id}/observations -> evidence-policy-regimes
 artifact://{content_hash} -> resource-surface, sealed-provenance-honesty
 dataref://{data_ref_id} -> resource-surface
 code://{code_hash} -> resource-surface
