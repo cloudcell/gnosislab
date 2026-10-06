@@ -676,6 +676,27 @@ class TestHTTPLifecycle:
         assert entry["evidence_policy"]["rationale"] == (
             SINGLE_MEASUREMENT["rationale"])
 
+    async def test_observations_resource_exposes_policy_snapshot(
+            self, server_url):
+        """trial://{id}/observations answers which regime governed the
+        observation — the admission-time snapshot, not a join."""
+        pid, hid, tid, _ = await _design_and_capture(
+            server_url, policy=SINGLE_MEASUREMENT)
+        await _run_to_completion(server_url, pid, tid)
+        r = await call_tool_http(server_url, "record_observation", {
+            "trial_id": tid, "metrics": {"acc": 0.9},
+            "spatiotemporal_region": "test"})
+        assert "error" not in r
+        obs = await read_resource_http(
+            server_url, f"trial://{tid}/observations")
+        entry = next(o for o in obs
+                     if o["id"] == r["observation_id"])
+        assert entry["variance"] is None  # not measured
+        assert entry["evidence_policy"]["regime"] == (
+            "single_measurement")
+        assert entry["evidence_policy"]["rationale"] == (
+            SINGLE_MEASUREMENT["rationale"])
+
     async def test_legacy_caller_default_policy_in_resource(
             self, server_url):
         """Callers that never heard of evidence_policy keep the old

@@ -57,11 +57,12 @@ PART C — seal immutability and the absent bypass
     policy/override/bypass field exists. The caller supplies evidence,
     never the rule.
 11. programme://<pid>/trials resource → each trial's declared
-    evidence_policy (regime + rationale) is visible. The observation
-    row's policy snapshot is checkable via the trial detail page in
-    the episteme observability GUI (:38081) — a single_measurement
-    observation renders variance as "not measured", never a
-    fabricated 0.0.
+    evidence_policy (regime + rationale) is visible.
+    trial://<tid>/observations → each admitted observation carries its
+    own admission-time policy snapshot; a single_measurement
+    observation shows variance: null — never a fabricated 0.0.
+    The episteme observability GUI (:38081) trial page renders the
+    same "not measured".
 
 PART D — audit surfaces
 

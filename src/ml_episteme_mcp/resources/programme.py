@@ -294,6 +294,41 @@ def register(mcp, store: StateStore) -> None:
             indent=2,
         )
 
+    @mcp.resource("trial://{trial_id}/observations")
+    def get_trial_observations(trial_id: str) -> str:
+        """A trial's admitted observations — the evidence itself.
+
+        Each entry carries the admission-time evidence-policy snapshot
+        (regime + rationale), so a reader can answer which regime
+        governed this observation without joining through the bundle.
+        variance is null when it was not measured (a declared
+        single_measurement regime) — distinct from a measured zero.
+        """
+        trial = store.get_trial(trial_id)
+        if trial is None:
+            return json.dumps({"error": f"Trial not found: {trial_id}"})
+        return json.dumps(
+            [
+                {
+                    "id": o.id,
+                    "metrics": json.loads(o.metrics_json),
+                    # JSON null = not measured; a dict = measured
+                    # (including a measured 0.0)
+                    "variance": json.loads(o.variance_json),
+                    "evidence_policy": (
+                        json.loads(o.evidence_policy_json)
+                        if getattr(o, "evidence_policy_json", None)
+                        else {"version": 1,
+                              "regime": "repeated_measurement"}
+                    ),
+                    "spatiotemporal_region": o.spatiotemporal_region,
+                    "created_at": o.created_at,
+                }
+                for o in store.list_observations(trial_id)
+            ],
+            indent=2,
+        )
+
     @mcp.resource("trial://{trial_id}/artifacts")
     def get_trial_artifacts(trial_id: str) -> str:
         """The artifact manifest for a trial.

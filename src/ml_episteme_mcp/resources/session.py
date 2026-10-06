@@ -265,6 +265,7 @@ RESOURCES = [
     {"uri": "programme://{id}/trials", "description": "Trials in a programme"},
     {"uri": "programme://{id}/belief", "description": "Current belief state"},
     {"uri": "programme://{id}/budget", "description": "Remaining budget"},
+    {"uri": "trial://{id}/observations", "description": "Admitted observations with their evidence-policy snapshots (regime + rationale; variance null = not measured)"},
     {"uri": "trial://{id}/artifacts", "description": "Trial artifact manifest"},
     {"uri": "artifact://{content_hash}", "description": "Captured artifact file content"},
     {"uri": "dataref://{id}", "description": "DataRef details (provenance, hash, risk)"},
