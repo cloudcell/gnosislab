@@ -264,8 +264,37 @@ def _pidfile(name: str) -> Path:
 
 
 def _pid_alive(pid: int | None) -> bool:
+    """Liveness probe that does NOT kill the process it probes.
+
+    os.kill(pid, 0) is POSIX-only as a probe: on Windows, os.kill maps
+    to TerminateProcess(handle, sig) for any non-console-event sig —
+    os.kill(pid, 0) unconditionally TERMINATES the process with exit
+    code 0. Using it here would make `start` kill its own child on the
+    first health-miss and `status` kill every managed server it checks.
+    """
     if not pid:
         return False
+    if os.name == "nt":
+        import ctypes
+        import ctypes.wintypes
+
+        k32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = k32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+        )
+        if not handle:
+            return False
+        try:
+            code = ctypes.wintypes.DWORD()
+            if not k32.GetExitCodeProcess(
+                handle, ctypes.byref(code)
+            ):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            k32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -282,6 +311,26 @@ def _managed_pid(name: str) -> int | None:
 
 def _port_pid(port: int) -> int | None:
     """Listener pid on a TCP port, or None. Same-user processes only."""
+    if os.name == "nt":
+        # Windows has no ss; netstat -ano prints the owning pid as the
+        # last column of each LISTENING row.
+        try:
+            out = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True, text=True,
+            ).stdout
+        except OSError:
+            return None
+        suffix = f":{port}"
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and parts[3] == "LISTENING" \
+                    and parts[1].endswith(suffix):
+                try:
+                    return int(parts[-1])
+                except ValueError:
+                    continue
+        return None
     try:
         out = subprocess.run(
             ["ss", "-ltnpH", f"sport = :{port}"],

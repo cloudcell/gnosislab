@@ -14,6 +14,7 @@ background task holds the session and serves a call queue.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from typing import Any
 
@@ -35,6 +36,28 @@ def _utc_now() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _http_client_for(url: str):
+    """Custom httpx client for a streamable-http peer, or None for the
+    mcp default.
+
+    Same-host peers must never traverse a proxy: HTTP_PROXY env vars —
+    and, on Windows, system proxy settings — route a localhost connect
+    through a proxy that cannot serve it, stalling the connect and
+    blocking startup. Remote URLs keep mcp's default client, where env
+    proxies may be genuinely required.
+    """
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ("localhost", "127.0.0.1", "::1"):
+        return None
+    import httpx2
+
+    return httpx2.AsyncClient(
+        timeout=httpx2.Timeout(30.0, read=300.0), trust_env=False
+    )
 
 
 class ProbeTimeout(Exception):
@@ -95,12 +118,18 @@ class MCPClientAdaptor:
                         await self._serve()
             elif transport == "streamable-http":
                 url = self.config["url"]
-                async with streamable_http_client(url) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        self._session = session
-                        self._ready.set()
-                        await self._serve()
+                client = _http_client_for(url)
+                async with contextlib.AsyncExitStack() as stack:
+                    if client is not None:
+                        await stack.enter_async_context(client)
+                    async with streamable_http_client(
+                        url, http_client=client
+                    ) as (read, write):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            self._session = session
+                            self._ready.set()
+                            await self._serve()
             else:
                 raise ValueError(f"Unknown transport: {transport}")
         except Exception as e:
