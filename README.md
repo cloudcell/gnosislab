@@ -11,7 +11,7 @@
 [![CI](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/gnosislab?label=PyPI&cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab?cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
-[![License](https://img.shields.io/github/license/cloudcell/gnosislab)](LICENSE)
+[![License](https://img.shields.io/pypi/l/gnosislab?cacheSeconds=3600)](https://github.com/cloudcell/gnosislab/blob/master/LICENSE)
 [![piwheel downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcloudcell%2Fgnosislab%2Fmaster%2Fstats%2Fpiwheels.json&query=%24.downloads&label=piwheels%20downloads&color=blue)](https://www.piwheels.org/project/gnosislab/)
 [![PyPI downloads](https://pypistats.com/api/badges/gnosislab?period=total)](https://pypistats.com/packages/gnosislab)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/gnosislab?period=total&units=NONE&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/gnosislab)
