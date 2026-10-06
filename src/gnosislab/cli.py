@@ -297,9 +297,16 @@ def _port_pid(port: int) -> int | None:
     return None
 
 
+# Health/status probes go to 127.0.0.1 only — never through a system
+# proxy. urllib honours proxy env vars and, on Windows, the registry
+# (WPAD auto-detection can stall a urlopen for seconds). Localhost
+# traffic must not traverse that path or health checks look hung.
+_LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def _is_up(name: str) -> bool:
     try:
-        urllib.request.urlopen(
+        _LOCAL.open(
             f"http://127.0.0.1:{_var(name, 'PORT')}/health", timeout=2
         )
         return True
@@ -370,18 +377,33 @@ def start_one(name: str) -> int:
     return 0
 
 
+def _kill_group_or_proc(pid: int, sig) -> None:
+    """killpg the child's group (POSIX) or kill the process itself.
+
+    Windows has neither os.killpg nor SIGKILL — os.kill maps to
+    TerminateProcess, and process trees there are out of scope for
+    group semantics (spawned grandchildren need taskkill /T, which we
+    deliberately don't reach for).
+    """
+    killpg = getattr(os, "killpg", None)
+    if killpg is not None:
+        try:
+            killpg(pid, sig)
+            return
+        except OSError:
+            pass
+    try:
+        os.kill(pid, sig)
+    except OSError:
+        pass
+
+
 def stop_one(name: str) -> int:
     pid = _managed_pid(name)
     if _pid_alive(pid):
         # start_new_session made the child its own process-group
         # leader — kill the group so any children go down with it.
-        try:
-            os.killpg(pid, signal.SIGTERM)
-        except OSError:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except OSError:
-                pass
+        _kill_group_or_proc(pid, signal.SIGTERM)
     else:
         lpid = _port_pid(int(_var(name, "PORT")))
         if lpid is None:
@@ -401,13 +423,7 @@ def stop_one(name: str) -> int:
             break
         time.sleep(0.5)
     if _pid_alive(pid):
-        try:
-            os.killpg(pid, signal.SIGKILL)
-        except OSError:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
+        _kill_group_or_proc(pid, getattr(signal, "SIGKILL", signal.SIGTERM))
     _pidfile(name).unlink(missing_ok=True)
     print(f"{name}: stopped")
     return 0
@@ -589,7 +605,7 @@ def _export(argv: list[str]) -> int:
         ):
             dest = stage / "health" / f"{name}-{tag}.json"
             try:
-                with urllib.request.urlopen(
+                with _LOCAL.open(
                     f"http://127.0.0.1:{_var(name, port_key)}/{url_path}",
                     timeout=3,
                 ) as r:

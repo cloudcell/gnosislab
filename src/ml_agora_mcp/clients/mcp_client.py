@@ -165,7 +165,26 @@ class MCPClientAdaptor:
         while not self._call_queue.empty():
             self._call_queue.get_nowait()
         self._task = asyncio.create_task(self._run())
-        await self._ready.wait()
+        # connect() must not hang: _ready only fires when _run either
+        # completes initialize() or raises — a stalled transport
+        # (e.g. a proxied/dead endpoint that accepts but never answers)
+        # would otherwise block the caller forever, and with it the
+        # server startup that awaits connect() before binding.
+        timeout = float(self.config.get(
+            "connect_timeout_seconds",
+            self.config.get("call_timeout_seconds", 30),
+        ))
+        try:
+            await asyncio.wait_for(self._ready.wait(), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            self._task.cancel()
+            self._error = TimeoutError(
+                f"connect timed out after {timeout}s"
+            )
+            self.last_error = describe_error(self._error)
+            self.last_failed_operation = "connect"
+            self.last_failed_at = _utc_now()
+            raise self._error from e
         if self._error:
             raise self._error
         # The channel just proved healthy — last_error is transient
