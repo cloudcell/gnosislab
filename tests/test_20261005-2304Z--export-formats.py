@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from gnosislab_export.common.snapshot import load_snapshot  # noqa: E402
 from gnosislab_export.jsonld.exporter import export_jsonld  # noqa: E402
 from gnosislab_export.prov.exporter import export_prov  # noqa: E402
+from gnosislab_export.ro_crate.exporter import export_rocrate  # noqa: E402
 from gnosislab_export.cli import main as export_cli  # noqa: E402
 from export_fixtures import seed_stores  # noqa: E402
 
@@ -157,6 +158,50 @@ def test_prov_zip(stores, tmp_path):
     zpath = export_prov(snap, tmp_path / "prov.zip", zip_it=True)
     names = zipfile.ZipFile(zpath).namelist()
     assert "prov.json" in names
+
+
+def test_rocrate_descriptor_license_cc0(stores, tmp_path):
+    epi, ana = stores
+    snap = load_snapshot(epi, ana, programme_id="prog-t1")
+    crate = export_rocrate(snap, tmp_path / "crate")
+    graph = {
+        e["@id"]: e
+        for e in json.loads(
+            (crate / "ro-crate-metadata.json").read_text()
+        )["@graph"]
+    }
+    # descriptor is always CC0; dataset has no license unless declared
+    desc = graph["ro-crate-metadata.json"]
+    assert desc["license"] == {"@id": "https://spdx.org/licenses/CC0-1.0"}
+    assert "license" not in graph["./"]
+
+    crate2 = export_rocrate(
+        snap, tmp_path / "crate2", license_uri="https://spdx.org/licenses/CC-BY-4.0"
+    )
+    graph2 = {
+        e["@id"]: e
+        for e in json.loads(
+            (crate2 / "ro-crate-metadata.json").read_text()
+        )["@graph"]
+    }
+    assert graph2["./"]["license"] == {
+        "@id": "https://spdx.org/licenses/CC-BY-4.0"
+    }
+
+
+def test_cli_license_rejected_for_other_formats(stores, tmp_path):
+    epi, ana = stores
+    rc = export_cli(
+        [
+            "--programme", "prog-t1",
+            "--format", "prov",
+            "--license", "https://spdx.org/licenses/CC-BY-4.0",
+            "--out", str(tmp_path / "prov"),
+            "--episteme-db", str(epi),
+            "--anamnesis-db", str(ana),
+        ]
+    )
+    assert rc == 2
 
 
 # ---------------------------------------------------------------- cli

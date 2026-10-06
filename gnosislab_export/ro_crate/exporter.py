@@ -64,7 +64,9 @@ def _entity_node_id(ref: str, snapshot: Snapshot) -> dict:
     return {"@id": f"#external/{ref}"}
 
 
-def build_graph(snapshot: Snapshot, issues: list[str]) -> list[dict]:
+def build_graph(
+    snapshot: Snapshot, issues: list[str], license_uri: str | None = None
+) -> list[dict]:
     graph: list[dict] = []
 
     payload_ids: list[str] = []
@@ -84,6 +86,11 @@ def build_graph(snapshot: Snapshot, issues: list[str]) -> list[dict]:
             "@type": "CreativeWork",
             "conformsTo": [{"@id": c} for c in CONFORMS_TO],
             "about": {"@id": "./"},
+            # the descriptor is generated metadata — always CC0 so a
+            # published crate's description is unambiguously reusable;
+            # the dataset's own license stays user-declared (see
+            # export_rocrate's license_uri)
+            "license": {"@id": "https://spdx.org/licenses/CC0-1.0"},
         }
     )
     root = {
@@ -100,6 +107,10 @@ def build_graph(snapshot: Snapshot, issues: list[str]) -> list[dict]:
         + [{"@id": f"#programme/{p.id}"} for p in snapshot.programmes],
         "publisher": {"@id": "#gnosislab"},
     }
+    if license_uri:
+        # payload is the user's experiment record — the exporter only
+        # stamps a data license when the user declares one
+        root["license"] = {"@id": license_uri}
     if issues:
         root["additionalProperty"] = [
             {
@@ -185,10 +196,13 @@ def build_graph(snapshot: Snapshot, issues: list[str]) -> list[dict]:
 
 
 def export_rocrate(
-    snapshot: Snapshot, out: str | Path, zip_it: bool = False
+    snapshot: Snapshot,
+    out: str | Path,
+    zip_it: bool = False,
+    license_uri: str | None = None,
 ) -> Path:
     issues = validate_snapshot(snapshot)
-    graph = build_graph(snapshot, issues)
+    graph = build_graph(snapshot, issues, license_uri)
     descriptor = {"@context": CONTEXT, "@graph": graph}
 
     out = Path(out)

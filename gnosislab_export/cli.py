@@ -40,6 +40,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="output directory (or .zip path with --zip)",
     )
     p.add_argument("--zip", action="store_true", help="also emit <out>.zip")
+    p.add_argument(
+        "--license",
+        metavar="URI",
+        help=(
+            "declare a license for the exported dataset (ro-crate only; "
+            "e.g. https://spdx.org/licenses/CC-BY-4.0). The metadata "
+            "descriptor is always CC0; the data license is yours to set."
+        ),
+    )
     p.add_argument("--episteme-db", default=DEFAULT_EPISTEME_DB)
     p.add_argument("--anamnesis-db", default=DEFAULT_ANAMNESIS_DB)
     return p
@@ -47,6 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.license and args.format != "ro-crate":
+        print(
+            f"export: --license applies to ro-crate, not '{args.format}' "
+            "— refusing to silently drop a licensing declaration",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         snapshot = load_snapshot(
@@ -69,8 +86,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         from .jsonld.exporter import export_jsonld as export
 
+    kwargs = {"zip_it": args.zip}
+    if args.format == "ro-crate" and args.license:
+        kwargs["license_uri"] = args.license
+
     try:
-        path = export(snapshot, Path(args.out), zip_it=args.zip)
+        path = export(snapshot, Path(args.out), **kwargs)
     except Exception as e:
         print(f"export: {e}", file=sys.stderr)
         return 1
