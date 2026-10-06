@@ -37,6 +37,43 @@ entry timestamps are commit times in **UTC**.
 
 ### Added
 
+- **Evidence-policy regimes — preregistered evidence admission**
+  the unconditional non-zero-variance gate on
+  `record_observation` is replaced by a
+  declared evidence regime that is part of the experimental design:
+  `design_experiment` accepts `evidence_policy` (versioned JSON:
+  `{"version": 1, "regime": ...}`), the declaration is stored on the
+  trial, snapshotted onto the sealed bundle at `capture_bundle`
+  (which takes no policy parameter — the seal is a copy, not a second
+  declaration point), and snapshotted again onto each admitted
+  observation. `record_observation(trial_id, metrics,
+  spatiotemporal_region, variance=None)` has no bypass parameter — the
+  caller supplies evidence, the sealed policy supplies the rule.
+  Under the default `repeated_measurement` regime, unmeasured
+  variance (`null`/empty) is refused with the `single_measurement`
+  escape hatch named in the error, while a **measured** all-zero
+  mapping is admitted (a deterministic computation legitimately
+  reports 0.0) and surfaced as a seed-propagation advisory rather
+  than rejected. `single_measurement` requires a non-empty rationale
+  at design time and records `variance_json` as JSON `null` — never a
+  fabricated 0.0. A single-seed bundle under the default regime now
+  captures with an advisory warning instead of producing an
+  unadmittable trial. New `evidence_policy_consistency` integrity
+  check (13th) detects trial↔bundle↔observation divergence, malformed
+  policies, and unmeasured-variance violations on hand-constructed
+  rows; live + archived GUI views render unmeasured variance as "not
+  measured"; the policy survives archive round-trips and RO-Crate/
+  payload exports. `check_reproducibility` is renamed
+  `check_uncertainty_requirements` — reproducibility is the
+  seal/replay property, variance is the uncertainty measurement; a-00
+  §5.7 reworded to match. Backwards compatible: NULL policy columns
+  read as `repeated_measurement`, old callers keep the old behaviour.
+  Tests: `test_20261006-2156Z--evidence-policy-regimes.py` (52
+  tests); diagnostic prompt
+  `diagnostics/20261006-2216Z-evidence-policy-regimes.md` plus
+  host-side probe `scripts/diagnose_evidence_policy.py`.
+  *(2026-10-06 22:20Z)*
+
 - **Verdict confidence → computed posterior** (e-plan 20260929-1642Z)
   — the indicted confidence literals are deleted:
   `VERDICT_CONFIDENCE_{ACCEPTED,REJECTED}` (0.85 — unreachable per
