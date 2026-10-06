@@ -698,6 +698,52 @@ def _upgrade() -> int:
               file=sys.stderr)
         return 1
 
+    if os.name == "nt":
+        # Windows locks a running exe: gnosislab.exe can't be replaced
+        # while this very process holds it (uv fails with error 32 —
+        # file in use). Hand the upgrade to a detached helper that
+        # waits for this PID to exit, then runs the steps.
+        import tempfile
+
+        pid = os.getpid()
+        lines = [
+            "@echo off",
+            ":wait",
+            f'tasklist /fi "PID eq {pid}" | find "{pid}" >nul 2>&1',
+            "if %errorlevel%==0 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto wait",
+            ")",
+        ]
+        for cmd in steps:
+            lines.append(subprocess.list2cmdline(cmd))
+            lines += [
+                "if %errorlevel% neq 0 (",
+                "  echo gnosislab: upgrade FAILED",
+                "  pause",
+                "  exit /b %errorlevel%",
+                ")",
+            ]
+        lines += [
+            "echo gnosislab: upgrade complete",
+            "gnosislab version",
+            "pause",
+            'del "%~f0"',
+        ]
+        script = Path(tempfile.gettempdir()) / f"gnosislab-upgrade-{pid}.cmd"
+        script.write_text("\r\n".join(lines) + "\r\n")
+        # CREATE_NEW_CONSOLE: the helper gets its own window and
+        # outlives this process; detaching silently would hide the
+        # upgrade's progress and its failure.
+        subprocess.Popen(
+            ["cmd", "/c", str(script)],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+            close_fds=True,
+        )
+        print("gnosislab: updater spawned in a new window — it runs"
+              " the moment this process exits")
+        return 0
+
     for cmd in steps:
         print(f"gnosislab: {' '.join(cmd)}")
         rc = subprocess.run(cmd).returncode
