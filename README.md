@@ -129,10 +129,26 @@ uv sync
 ./gnosislab start all
 ```
 
-> **Linux is currently required for sealed trial execution.**  
-> The executor uses `bubblewrap` mount namespaces and `strace`.
-
-On Debian/Ubuntu:
+> **Sealed trial execution needs Linux tooling.** The executor isolates
+> trials with `bubblewrap` mount namespaces and traces reads with
+> `strace`. Neither exists on Windows (or macOS) — there is no bwrap
+> package to install. With the default `sandbox = "auto"`, trials on
+> those platforms **fail closed** rather than silently running
+> unsealed. To run trials without isolation, opt out explicitly in
+> `~/.ml-episteme/config.toml`:
+>
+> ```toml
+> [executor]
+> sandbox = "none"
+> ```
+>
+> (equivalently, `ML_EPISTEME_SANDBOX=none`). If you also configure
+> `[executor] sealed_path_patterns`, add
+> `sealed_enforcement = "audit"` — `deny` needs a mount namespace to
+> arm. Coding agents often offer to "disable sandboxing" when they hit
+> this error; the knob they should set is `sandbox`, shown above.
+>
+> On Debian/Ubuntu the full experience is:
 
 ```bash
 sudo apt install bubblewrap strace
