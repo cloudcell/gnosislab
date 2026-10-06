@@ -10,12 +10,19 @@ import time
 import uuid
 from pathlib import Path
 
-from ..state.models import Bundle, Trial
+from ..state.models import (
+    Bundle,
+    EvidenceRegime,
+    Trial,
+    canonical_evidence_policy,
+    parse_evidence_policy,
+)
 from ..state.store import StateStore, lint_shared_paths
 from ..clients.adaptor import MCPAdaptor
 from ..enforcement.commitments import (
     check_budget_exhausted,
     check_bundle_controlled,
+    check_evidence_policy,
     check_hypothesis_exists,
     check_hypothesis_in_programme,
     check_hypothesis_testable,
@@ -124,6 +131,34 @@ def _lint_bundle_snippets(store: StateStore, code_hashes: list[str]) -> list[dic
         warnings.extend(
             lint_shared_paths(snippet.code_text, snippet.original_path or h)
         )
+    return warnings
+
+
+def _evidence_policy_advisories(
+    policy: dict, seeds: list[int]
+) -> list[dict]:
+    """Advisory (non-blocking) observations about the declared policy.
+
+    A single-seed bundle under the default repeated-measurement regime
+    can only satisfy the policy if the experiment replicates internally
+    — warn at seal time, where the mistake is still free to fix.
+    """
+    warnings: list[dict] = []
+    if (
+        policy.get("regime") == EvidenceRegime.repeated_measurement.value
+        and len(seeds) < 2
+    ):
+        warnings.append({
+            "kind": "evidence_policy",
+            "message": (
+                "A single-seed bundle may be unable to satisfy the "
+                "repeated-measurement evidence policy unless the "
+                "experiment performs replication internally. If "
+                "repetition is meaningless for this design, declare "
+                "evidence_policy={'regime': 'single_measurement', "
+                "'rationale': ...} at design_experiment."
+            ),
+        })
     return warnings
 
 
@@ -579,17 +614,38 @@ def register(
     _max_trial_timeout = float(_exec_cfg.get("max_timeout_seconds", 14400))
 
     @mcp.tool()
-    def design_experiment(programme_id: Annotated[str, Field(description='ID of the target research programme.')], hypothesis_id: Annotated[str, Field(description='ID of the target hypothesis.')], config: Annotated[dict | str, Field(description='Trial configuration dict handed to run_training; may be JSON-encoded.')]) -> Annotated[CallToolResult, DesignExperimentOut]:
+    def design_experiment(programme_id: Annotated[str, Field(description='ID of the target research programme.')], hypothesis_id: Annotated[str, Field(description='ID of the target hypothesis.')], config: Annotated[dict | str, Field(description='Trial configuration dict handed to run_training; may be JSON-encoded.')], evidence_policy: Annotated[dict | str | None, Field(description="Evidence-admission regime for this trial, declared before execution (pre-registration). Default 'repeated_measurement' requires measured per-metric variance. To relax it: {'regime': 'single_measurement', 'rationale': 'why replication is not the uncertainty representation'}. The declaration is sealed into the bundle at capture_bundle and cannot be changed after seeing the result; object or JSON-encoded.")] = None) -> Annotated[CallToolResult, DesignExperimentOut]:
         """Design an experiment: create a trial (data item) within the programme.
 
-        config may be sent as a JSON-encoded string if your client
-        cannot emit objects.
+        config and evidence_policy may be sent as JSON-encoded strings
+        if your client cannot emit objects.
 
+        evidence_policy declares what counts as admissible evidence:
+        the default repeated_measurement regime requires measured
+        variance per metric at record_observation; single_measurement
+        (with a rationale) admits an observation without it. The
+        declaration is part of the design — sealed into the bundle at
+        capture_bundle, snapshotted onto the observation at admission,
+        and immutable once declared.
+
+        Enforcement: commitment 5 — reproducibility is the price of
+        admission (evidence policy must be well-formed when declared).
         Enforcement: commitment 5 — budget is an epistemic resource (trial count + wall time).
         Enforcement: commitment 10 — the agent is a scientist (hypothesis must exist).
         """
         try:
             config = coerce_json(config, dict, "config")
+            policy = None
+            if evidence_policy is not None:
+                evidence_policy = coerce_json(
+                    evidence_policy, dict, "evidence_policy"
+                )
+                # Enforcement: commitment 5 — a malformed or unearned
+                # regime fails here, at declaration, not at admission
+                err = check_evidence_policy(evidence_policy)
+                if err:
+                    return fail(json.dumps({"error": err}))
+                policy = canonical_evidence_policy(evidence_policy)
             # Enforcement: commitment 10 — the agent is a scientist, not a scribe
             hyp = store.get_hypothesis(hypothesis_id)
             err = check_hypothesis_exists(hyp)
@@ -628,6 +684,9 @@ def register(
                 programme_id=programme_id,
                 hypothesis_id=hypothesis_id,
                 config_json=json.dumps(config),
+                evidence_policy_json=(
+                    json.dumps(policy) if policy is not None else None
+                ),
             )
             store.create_trial(trial)
 
@@ -637,7 +696,14 @@ def register(
             # fail AFTER its trial row exists.
             store.promote_hypothesis_if_proposed(hypothesis_id)
 
-            return ok({"trial_id": trial.id, "status": "designed"})
+            return ok({
+                "trial_id": trial.id,
+                "status": "designed",
+                "evidence_policy": (
+                    policy if policy is not None
+                    else parse_evidence_policy(None)
+                ),
+            })
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
 
@@ -730,6 +796,28 @@ def register(
                     ),
                 }))
 
+            # Commitment 5 / a-00 §5.7: seal the declared evidence
+            # policy — a provenance snapshot of the trial's design-time
+            # declaration, not a second declaration point. Re-validate
+            # the stored value: a malformed policy on the trial row
+            # must fail closed here rather than be sealed.
+            try:
+                policy = parse_evidence_policy(trial.evidence_policy_json)
+            except ValueError:
+                return fail(json.dumps({
+                    "error": (
+                        f"Trial {trial_id} carries a malformed "
+                        "evidence_policy_json — refusing to seal a "
+                        "bundle over an unreadable evidence contract."
+                    ),
+                }))
+            err = check_evidence_policy(policy)
+            if err:
+                return fail(json.dumps({"error": err}))
+            sealed_policy_json = json.dumps(
+                canonical_evidence_policy(policy)
+            )
+
             # Enforcement: commitment 6 — validate code_ref at capture time
             err = _validate_code_ref(code_ref)
             if err:
@@ -799,6 +887,7 @@ def register(
                 splits_json=json.dumps(splits),
                 data_refs_json=data_refs_json,
                 baseline_ref=baseline_ref,
+                evidence_policy_json=sealed_policy_json,
             )
             store.create_bundle(bundle)
             store.link_bundle(trial_id, bundle.id)
@@ -807,9 +896,10 @@ def register(
                 "status": "captured",
                 "code_hash": code_hash,
                 "code_hash_extra": code_hash_extra,
+                "evidence_policy": policy,
                 "warnings": _lint_bundle_snippets(
                     store, [code_hash] + code_hash_extra
-                ),
+                ) + _evidence_policy_advisories(policy, seeds),
             })
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
@@ -896,6 +986,25 @@ def register(
                     ),
                 }))
 
+            # Commitment 5 / a-00 §5.7: seal the declared evidence
+            # policy — same snapshot discipline as capture_bundle.
+            try:
+                policy = parse_evidence_policy(trial.evidence_policy_json)
+            except ValueError:
+                return fail(json.dumps({
+                    "error": (
+                        f"Trial {trial_id} carries a malformed "
+                        "evidence_policy_json — refusing to seal a "
+                        "bundle over an unreadable evidence contract."
+                    ),
+                }))
+            err = check_evidence_policy(policy)
+            if err:
+                return fail(json.dumps({"error": err}))
+            sealed_policy_json = json.dumps(
+                canonical_evidence_policy(policy)
+            )
+
             # Validate code_hash — promotion path: if the hash is not
             # in code_snippets, an ingested artifact (artifact_files)
             # with the same content address is materialized into a
@@ -950,6 +1059,7 @@ def register(
                 splits_json=json.dumps(splits),
                 data_refs_json=data_refs_json,
                 baseline_ref=baseline_ref,
+                evidence_policy_json=sealed_policy_json,
             )
             store.create_bundle(bundle)
             store.link_bundle(trial_id, bundle.id)
@@ -959,9 +1069,10 @@ def register(
                 "code_hash": code_hash,
                 "code_hash_extra": code_hash_extra or [],
                 "code_ref": f"code://{code_hash}",
+                "evidence_policy": policy,
                 "warnings": _lint_bundle_snippets(
                     store, [code_hash] + (code_hash_extra or [])
-                ),
+                ) + _evidence_policy_advisories(policy, seeds),
             })
         except Exception as e:
             return fail(json.dumps({"error": str(e)}))
@@ -1593,6 +1704,11 @@ def register(
                             "id": t.id,
                             "hypothesis_id": t.hypothesis_id,
                             "config": json.loads(t.config_json),
+                            # the declared evidence regime — NULL on
+                            # legacy trials reads as the default
+                            "evidence_policy": parse_evidence_policy(
+                                t.evidence_policy_json
+                            ),
                             "bundle_id": t.bundle_id,
                             "status": t.status.value,
                             "retry_reason": t.retry_reason,

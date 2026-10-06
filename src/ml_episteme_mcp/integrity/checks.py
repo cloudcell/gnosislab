@@ -575,6 +575,154 @@ def _check_mislabeled_outcome(store) -> dict:
     return _res("mislabeled_outcome", violations, detail)
 
 
+def _check_evidence_policy_consistency(store) -> dict:
+    """Evidence-policy coherence across the trial→bundle→observation
+    chain (plan-20261006-2058Z). The policy is declared at design,
+    sealed onto the bundle, and snapshotted onto the observation —
+    this check detects the states enforcement cannot reach: hand-edits,
+    write-path bugs, legacy drift.
+
+    Violations:
+      - malformed policy JSON / unknown regime / unsupported version
+        on a trial or bundle
+      - single_measurement declared without a non-empty rationale
+      - an observation admitted under repeated_measurement with
+        unmeasured variance (variance_json = 'null')
+      - divergence between the trial's declaration, the bundle's seal,
+        and the observation's snapshot
+
+    Advisory (reported, not a violation): measured all-zero variance
+    under repeated_measurement — legitimate for deterministic systems,
+    but a classic symptom of seeds that never reached the computation.
+    """
+    from ..state.models import (
+        EvidenceRegime,
+        EVIDENCE_POLICY_VERSION,
+    )
+
+    known = {r.value for r in EvidenceRegime}
+
+    def _parse(raw):
+        """None → the default policy; malformed → a marker dict that
+        fails every comparison."""
+        if raw is None:
+            return {
+                "version": EVIDENCE_POLICY_VERSION,
+                "regime": EvidenceRegime.repeated_measurement.value,
+            }
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {"_malformed": raw}
+
+    violations = []
+    advisories = []
+
+    def _policy_problems(policy, owner: str) -> list[str]:
+        problems = []
+        if "_malformed" in policy:
+            problems.append(f"{owner}: malformed evidence_policy_json")
+            return problems
+        if policy.get("version") != EVIDENCE_POLICY_VERSION:
+            problems.append(
+                f"{owner}: unsupported evidence policy version "
+                f"{policy.get('version')!r}"
+            )
+        regime = policy.get("regime")
+        if regime not in known:
+            problems.append(f"{owner}: unknown regime {regime!r}")
+        elif (
+            regime == EvidenceRegime.single_measurement.value
+            and not str(policy.get("rationale") or "").strip()
+        ):
+            problems.append(
+                f"{owner}: single_measurement without rationale"
+            )
+        return problems
+
+    # Trials and bundles: declared policies must be well-formed.
+    for table, owner_col in (("trials", "id"), ("bundles", "id")):
+        for r in store._fetchall(
+            f"SELECT {owner_col} AS oid, evidence_policy_json "
+            f"FROM {table} WHERE evidence_policy_json IS NOT NULL"
+        ):
+            problems = _policy_problems(
+                _parse(r["evidence_policy_json"]),
+                f"{table}:{r['oid']}",
+            )
+            violations.extend(problems)
+
+    # Trial ↔ bundle divergence: the sealed copy must equal the
+    # declared copy (normalized — NULL reads as the default).
+    for r in store._fetchall(
+        """SELECT t.id AS tid, t.evidence_policy_json AS tp,
+                  b.id AS bid, b.evidence_policy_json AS bp
+           FROM bundles b JOIN trials t ON t.id = b.trial_id"""
+    ):
+        tp, bp = _parse(r["tp"]), _parse(r["bp"])
+        if tp != bp:
+            violations.append(
+                f"bundle:{r['bid']} policy diverges from trial:"
+                f"{r['tid']} declaration ({tp} vs {bp})"
+            )
+
+    # Observations: the admission-time snapshot must match the sealed
+    # policy, and the stored variance must satisfy it.
+    for r in store._fetchall(
+        """SELECT o.id AS oid, o.variance_json AS var,
+                  o.evidence_policy_json AS op,
+                  b.evidence_policy_json AS bp
+           FROM observations o
+           JOIN trials t ON t.id = o.trial_id
+           LEFT JOIN bundles b ON b.id = t.bundle_id"""
+    ):
+        op, bp = _parse(r["op"]), _parse(r["bp"])
+        if op != bp:
+            violations.append(
+                f"observation:{r['oid']} policy snapshot diverges from "
+                f"the sealed bundle policy ({op} vs {bp})"
+            )
+        regime = op.get("regime")
+        try:
+            variance = json.loads(r["var"]) if r["var"] else None
+        except Exception:
+            violations.append(
+                f"observation:{r['oid']} malformed variance_json"
+            )
+            continue
+        if (
+            regime == EvidenceRegime.repeated_measurement.value
+            and variance is None
+        ):
+            violations.append(
+                f"observation:{r['oid']} has unmeasured variance under "
+                "repeated_measurement — admitted in violation of its "
+                "sealed policy"
+            )
+        elif (
+            regime == EvidenceRegime.repeated_measurement.value
+            and isinstance(variance, dict)
+            and variance
+            and all(v == 0 for v in variance.values())
+        ):
+            advisories.append(
+                f"observation:{r['oid']} measured all-zero variance "
+                "under repeated_measurement — legitimate if "
+                "deterministic, but check seed propagation"
+            )
+
+    res = _res(
+        "evidence_policy_consistency",
+        violations,
+        f"{len(violations)} violation(s); {len(advisories)} "
+        "advisory(ies) — measured-zero variance under "
+        "repeated_measurement is reported for audit, not refused",
+    )
+    if advisories:
+        res["advisories"] = advisories
+    return res
+
+
 def _check_stalled_running_trials(
     store, executor, margin_seconds: int
 ) -> dict:
@@ -701,6 +849,7 @@ def run_checks(
         _check_budget_exceeded(store),
         _check_stuck_hypotheses(store),
         _check_mislabeled_outcome(store),
+        _check_evidence_policy_consistency(store),
         _check_stalled_running_trials(
             store, executor, stalled_trial_seconds
         ),

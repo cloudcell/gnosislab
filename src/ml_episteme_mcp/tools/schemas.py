@@ -195,6 +195,7 @@ class AbandonHypothesisOut(TypedDict, total=False):
 class DesignExperimentOut(TypedDict, total=False):
     trial_id: str | None
     status: str | None
+    evidence_policy: dict | None
 
 
 class CaptureBundleOut(TypedDict, total=False):
@@ -203,6 +204,7 @@ class CaptureBundleOut(TypedDict, total=False):
     code_hash: str | None
     code_hash_extra: list[str] | None
     code_ref: str | None
+    evidence_policy: dict | None
     warnings: list[dict] | None
 
 
@@ -238,6 +240,8 @@ class ListTrialsOut(TypedDict, total=False):
 class RecordObservationOut(TypedDict, total=False):
     observation_id: str | None
     status: str | None
+    evidence_regime: str | None
+    warnings: list[str] | None
 
 
 class UpdateBeliefOut(TypedDict, total=False):
@@ -292,6 +296,7 @@ class CaptureBundleFromCodeHashOut(TypedDict, total=False):
     code_hash: str | None
     code_hash_extra: list[str] | None
     code_ref: str | None
+    evidence_policy: dict | None
     warnings: list | None
 
 

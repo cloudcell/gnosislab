@@ -295,6 +295,7 @@ class Archiver:
             executor_output_json TEXT,
             started_at TEXT,
             finished_at TEXT,
+            evidence_policy_json TEXT,
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS observations (
@@ -303,6 +304,7 @@ class Archiver:
             metrics_json TEXT NOT NULL,
             variance_json TEXT NOT NULL,
             spatiotemporal_region TEXT NOT NULL,
+            evidence_policy_json TEXT,
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS beliefs (
@@ -331,6 +333,7 @@ class Archiver:
             splits_json TEXT NOT NULL,
             data_refs_json TEXT,
             baseline_ref TEXT,
+            evidence_policy_json TEXT,
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS data_refs (

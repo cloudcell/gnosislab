@@ -145,19 +145,29 @@ def render_trial_detail(
     metric_values: dict[str, list[float]] = {}
     for obs in observations:
         metrics = json.loads(obs.metrics_json) if obs.metrics_json else {}
-        variance = json.loads(obs.variance_json) if obs.variance_json else {}
+        # JSON null = variance not measured (single_measurement regime);
+        # distinct from a measured-zero mapping ({"m": 0.0}).
+        variance = json.loads(obs.variance_json) if obs.variance_json else None
+        policy = json.loads(obs.evidence_policy_json) \
+            if getattr(obs, "evidence_policy_json", None) else {}
+        regime = policy.get("regime", "repeated_measurement")
 
         for k, v in metrics.items():
             metric_values.setdefault(k, []).append(v)
 
         metrics_str = ", ".join(f"{k}={v:.4f}" for k, v in metrics.items())
-        variance_str = ", ".join(f"{k}={v:.4f}" for k, v in variance.items())
+        variance_str = (
+            ", ".join(f"{k}={v:.4f}" for k, v in variance.items())
+            if variance is not None
+            else "not measured"
+        )
 
         obs_rows.append(f"""
         <tr id="obs-{escape(obs.id)}">
             <td>{link_id(obs.id)}</td>
             <td>{escape(metrics_str)}</td>
             <td>{escape(variance_str)}</td>
+            <td>{escape(regime)}</td>
             <td>{escape(obs.spatiotemporal_region or '—')}</td>
             <td>{format_timestamp(obs.created_at)}</td>
         </tr>""")
@@ -194,6 +204,14 @@ def render_trial_detail(
             except Exception:
                 pass
         data_refs_badge = f' <span class="badge">{data_refs_count} data refs</span>' if data_refs_count else ""
+        # The sealed evidence policy — NULL (legacy bundles) reads as
+        # the repeated-measurement default.
+        try:
+            bundle_policy = json.loads(bundle.evidence_policy_json) \
+                if getattr(bundle, "evidence_policy_json", None) \
+                else {"regime": "repeated_measurement"}
+        except Exception:
+            bundle_policy = {"_malformed": bundle.evidence_policy_json}
         # Parse extra code hashes for display
         extra_hashes = []
         if getattr(bundle, "code_hash_extra_json", None):
@@ -221,6 +239,7 @@ def render_trial_detail(
                 <tr><th>seeds</th><td>{escape(seeds)}</td></tr>
                 <tr><th>splits</th><td>{render_json_pretty(splits)}</td></tr>
                 <tr><th>baseline_ref</th><td>{link_id(bundle.baseline_ref)}</td></tr>
+                <tr><th>evidence_policy</th><td>{render_json_pretty(bundle_policy)}</td></tr>
             </table>
         </div>"""
 
@@ -410,7 +429,7 @@ def render_trial_detail(
     <div class="section">
         <h2>Observations</h2>
         <table>
-            <thead><tr><th>ID</th><th>Metrics</th><th>Variance</th><th>Region</th><th>Created</th></tr></thead>
+            <thead><tr><th>ID</th><th>Metrics</th><th>Variance</th><th>Evidence Regime</th><th>Region</th><th>Created</th></tr></thead>
             <tbody>
                 {''.join(obs_rows) if obs_rows else '<tr><td colspan="5" class="muted">No observations yet.</td></tr>'}
             </tbody>

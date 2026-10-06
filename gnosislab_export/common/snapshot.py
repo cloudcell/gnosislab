@@ -70,6 +70,7 @@ class Trial:
     duration_seconds: float | None
     started_at: str | None
     finished_at: str | None
+    evidence_policy: dict | None
     created_at: str
 
 
@@ -78,7 +79,8 @@ class Observation:
     id: str
     trial_id: str
     metrics: dict
-    variance: dict
+    variance: dict | None  # None = variance not measured (JSON null)
+    evidence_policy: dict | None  # admission-time sealed-policy snapshot
     created_at: str
 
 
@@ -101,6 +103,7 @@ class Bundle:
     env_ref: str
     seeds: list
     splits: list
+    evidence_policy: dict | None  # sealed snapshot of the declared policy
     created_at: str
 
 
@@ -196,6 +199,12 @@ def _json(raw: str | None, default):
         return json.loads(raw)
     except json.JSONDecodeError:
         return default
+
+
+def _col(row: sqlite3.Row, name: str):
+    """Row value or None when the column is absent — exports run
+    read-only against DBs that may predate additive migrations."""
+    return row[name] if name in row.keys() else None
 
 
 def open_ro(path: str | Path) -> sqlite3.Connection:
@@ -321,6 +330,7 @@ def _load(epi, epi_path: Path, ana_path: Path | None,
             bundle_id=r["bundle_id"], status=r["status"],
             duration_seconds=r["duration_seconds"],
             started_at=r["started_at"], finished_at=r["finished_at"],
+            evidence_policy=_json(_col(r, "evidence_policy_json"), None),
             created_at=r["created_at"],
         )
         for r in epi.execute(
@@ -331,7 +341,8 @@ def _load(epi, epi_path: Path, ana_path: Path | None,
         Observation(
             id=r["id"], trial_id=r["trial_id"],
             metrics=_json(r["metrics_json"], {}),
-            variance=_json(r["variance_json"], {}),
+            variance=_json(r["variance_json"], None),
+            evidence_policy=_json(_col(r, "evidence_policy_json"), None),
             created_at=r["created_at"],
         )
         for r in epi.execute(
@@ -356,7 +367,9 @@ def _load(epi, epi_path: Path, ana_path: Path | None,
         Bundle(
             id=r["id"], trial_id=r["trial_id"], code_ref=r["code_ref"],
             env_ref=r["env_ref"], seeds=_json(r["seeds_json"], []),
-            splits=_json(r["splits_json"], []), created_at=r["created_at"],
+            splits=_json(r["splits_json"], []),
+            evidence_policy=_json(_col(r, "evidence_policy_json"), None),
+            created_at=r["created_at"],
         )
         for r in epi.execute(
             f"SELECT * FROM bundles WHERE trial_id IN ({ph(trial_ids)})", t_ids

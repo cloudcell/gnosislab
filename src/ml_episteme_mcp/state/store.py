@@ -509,6 +509,7 @@ CREATE TABLE IF NOT EXISTS trials (
     started_at TEXT,
     finished_at TEXT,
     retry_reason TEXT,
+    evidence_policy_json TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (programme_id) REFERENCES programmes(id),
     FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
@@ -520,6 +521,7 @@ CREATE TABLE IF NOT EXISTS observations (
     metrics_json TEXT NOT NULL,
     variance_json TEXT NOT NULL,
     spatiotemporal_region TEXT NOT NULL,
+    evidence_policy_json TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (trial_id) REFERENCES trials(id)
 );
@@ -553,6 +555,7 @@ CREATE TABLE IF NOT EXISTS bundles (
     splits_json TEXT NOT NULL,
     data_refs_json TEXT,
     baseline_ref TEXT,
+    evidence_policy_json TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (trial_id) REFERENCES trials(id)
 );
@@ -849,10 +852,35 @@ class StateStore:
                 )
         self._conn.commit()
 
+        # Evidence-policy regimes (plan-20261006-2058Z): the declared
+        # evidence policy rides the trial at design time, is sealed
+        # onto the bundle at capture, and is snapshotted onto the
+        # observation at admission. NULL reads as the default
+        # repeated-measurement regime — legacy rows are never
+        # reinterpreted as single-measurement evidence.
+        if "evidence_policy_json" not in trial_cols:
+            self._conn.execute(
+                "ALTER TABLE trials ADD COLUMN evidence_policy_json TEXT"
+            )
+            self._conn.commit()
+
         # Add data_refs_json column to bundles (for structured data provenance)
         bundle_cols = {
             r[1] for r in self._conn.execute("PRAGMA table_info(bundles)")
         }
+        if "evidence_policy_json" not in bundle_cols:
+            self._conn.execute(
+                "ALTER TABLE bundles ADD COLUMN evidence_policy_json TEXT"
+            )
+            self._conn.commit()
+        obs_cols = {
+            r[1] for r in self._conn.execute("PRAGMA table_info(observations)")
+        }
+        if "evidence_policy_json" not in obs_cols:
+            self._conn.execute(
+                "ALTER TABLE observations ADD COLUMN evidence_policy_json TEXT"
+            )
+            self._conn.commit()
         if "data_refs_json" not in bundle_cols:
             self._conn.execute(
                 "ALTER TABLE bundles ADD COLUMN data_refs_json TEXT"
@@ -1142,8 +1170,9 @@ class StateStore:
         self._write(
             "INSERT INTO bundles "
             "(id, trial_id, code_ref, code_hash, code_hash_extra_json, env_ref, "
-            "seeds_json, splits_json, data_refs_json, baseline_ref, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "seeds_json, splits_json, data_refs_json, baseline_ref, "
+            "evidence_policy_json, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 b.id,
                 b.trial_id,
@@ -1155,6 +1184,7 @@ class StateStore:
                 b.splits_json,
                 b.data_refs_json,
                 b.baseline_ref,
+                b.evidence_policy_json,
                 b.created_at,
             ),
         )
@@ -1176,6 +1206,11 @@ class StateStore:
             splits_json=row["splits_json"],
             data_refs_json=row["data_refs_json"],
             baseline_ref=row["baseline_ref"],
+            evidence_policy_json=(
+                row["evidence_policy_json"]
+                if "evidence_policy_json" in row.keys()
+                else None
+            ),
             created_at=row["created_at"],
         )
 
@@ -1187,8 +1222,8 @@ class StateStore:
             "INSERT INTO trials "
             "(id, programme_id, hypothesis_id, config_json, bundle_id, "
             "status, duration_seconds, artifact_path, executor_output_json, "
-            "started_at, finished_at, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "started_at, finished_at, evidence_policy_json, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 t.id,
                 t.programme_id,
@@ -1201,6 +1236,7 @@ class StateStore:
                 t.executor_output_json,
                 t.started_at,
                 t.finished_at,
+                t.evidence_policy_json,
                 t.created_at,
             ),
         )
@@ -1224,6 +1260,11 @@ class StateStore:
             started_at=row["started_at"],
             finished_at=row["finished_at"],
             retry_reason=row["retry_reason"],
+            evidence_policy_json=(
+                row["evidence_policy_json"]
+                if "evidence_policy_json" in row.keys()
+                else None
+            ),
             created_at=row["created_at"],
         )
 
@@ -1488,6 +1529,11 @@ class StateStore:
                 started_at=r["started_at"],
                 finished_at=r["finished_at"],
                 retry_reason=r["retry_reason"],
+                evidence_policy_json=(
+                    r["evidence_policy_json"]
+                    if "evidence_policy_json" in r.keys()
+                    else None
+                ),
                 created_at=r["created_at"],
             )
             for r in rows
@@ -1617,6 +1663,11 @@ class StateStore:
                 started_at=r["started_at"],
                 finished_at=r["finished_at"],
                 retry_reason=r["retry_reason"],
+                evidence_policy_json=(
+                    r["evidence_policy_json"]
+                    if "evidence_policy_json" in r.keys()
+                    else None
+                ),
                 created_at=r["created_at"],
             )
             for r in rows
@@ -1666,13 +1717,17 @@ class StateStore:
     def create_observation(self, o: Observation) -> None:
         verify_mece(o)
         self._write(
-            "INSERT INTO observations VALUES (?,?,?,?,?,?)",
+            "INSERT INTO observations "
+            "(id, trial_id, metrics_json, variance_json, "
+            "spatiotemporal_region, evidence_policy_json, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
             (
                 o.id,
                 o.trial_id,
                 o.metrics_json,
                 o.variance_json,
                 o.spatiotemporal_region,
+                o.evidence_policy_json,
                 o.created_at,
             ),
         )
@@ -1689,6 +1744,11 @@ class StateStore:
             metrics_json=row["metrics_json"],
             variance_json=row["variance_json"],
             spatiotemporal_region=row["spatiotemporal_region"],
+            evidence_policy_json=(
+                row["evidence_policy_json"]
+                if "evidence_policy_json" in row.keys()
+                else None
+            ),
             created_at=row["created_at"],
         )
 
@@ -1703,6 +1763,11 @@ class StateStore:
                 metrics_json=r["metrics_json"],
                 variance_json=r["variance_json"],
                 spatiotemporal_region=r["spatiotemporal_region"],
+                evidence_policy_json=(
+                    r["evidence_policy_json"]
+                    if "evidence_policy_json" in r.keys()
+                    else None
+                ),
                 created_at=r["created_at"],
             )
             for r in rows

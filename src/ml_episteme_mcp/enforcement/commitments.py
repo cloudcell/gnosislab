@@ -15,7 +15,14 @@ import json
 import re
 from typing import Any
 
-from ..state.models import Hypothesis, Programme, Trial, Bundle
+from ..state.models import (
+    EVIDENCE_POLICY_VERSION,
+    EvidenceRegime,
+    Bundle,
+    Hypothesis,
+    Programme,
+    Trial,
+)
 from ..state.store import StateStore
 from .. import _grounded_constants as _gc
 
@@ -219,16 +226,97 @@ def check_bundle_controlled(trial: Trial, store: StateStore) -> str | None:
     return None
 
 
-# --- Commitment 7: Reproducibility is the price of admission ---
+# --- Commitment 5 (a-00 §5.7): Reproducibility is the price of admission ---
+#
+# Two gates, kept conceptually separate (plan-20261006-2058Z):
+#   check_evidence_policy       — is the declared evidence regime well-formed?
+#   check_uncertainty_requirements — does the recorded evidence satisfy it?
+#
+# "Reproducibility" names the seal/replay property (Commitment 2's
+# bundle can be re-executed); the variance gate enforces §5.7's
+# uncertainty-reporting half, so it is named for what it checks.
 
 
-def check_reproducibility(variance: dict[str, float]) -> str | None:
-    """Commitment 7: Reproducibility is the price of admission.
+def check_evidence_policy(policy: dict | None) -> str | None:
+    """Commitment 5: the evidence regime is part of the predeclared design.
 
-    Rejects a single point estimate with no variance.
+    Called at design_experiment (declaration) and capture_bundle
+    (re-validation of the stored declaration before sealing). Rejects:
+
+      - a malformed policy (not a dict, or an unknown version)
+      - an unknown regime
+      - single_measurement without a non-empty rationale stating the
+        alternative evidential basis
+
+    None is valid — an undeclared policy means the repeated-measurement
+    default. There is deliberately no regime that relaxes the default
+    without leaving a named, sealed declaration in the record.
     """
-    if not variance or all(v == 0 for v in variance.values()):
-        return "Reproducibility is the price of admission: variance is required"
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        return (
+            "Reproducibility is the price of admission: evidence_policy "
+            f"must be an object, got {type(policy).__name__}"
+        )
+    version = policy.get("version", EVIDENCE_POLICY_VERSION)
+    if version != EVIDENCE_POLICY_VERSION:
+        return (
+            "Reproducibility is the price of admission: unsupported "
+            f"evidence policy version {version!r} (supported: "
+            f"{EVIDENCE_POLICY_VERSION})"
+        )
+    regime = policy.get("regime", EvidenceRegime.repeated_measurement.value)
+    known = {r.value for r in EvidenceRegime}
+    if regime not in known:
+        return (
+            "Reproducibility is the price of admission: unknown evidence "
+            f"regime {regime!r} (known: {sorted(known)})"
+        )
+    if regime == EvidenceRegime.single_measurement.value:
+        rationale = policy.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            return (
+                "Reproducibility is the price of admission: "
+                "single_measurement requires a non-empty rationale "
+                "stating the alternative evidential basis — the "
+                "declaration is sealed into the bundle and preserved in "
+                "provenance, so 'variance was inconvenient' does not "
+                "qualify."
+            )
+    return None
+
+
+def check_uncertainty_requirements(
+    variance: dict[str, float] | None,
+) -> str | None:
+    """Commitment 5 (a-00 §5.7): uncertainty must be measured under the
+    default repeated-measurement regime.
+
+    Rejects variance that was never measured (None, empty mapping, or a
+    non-mapping). A MEASURED zero is admitted — a deterministic system
+    run under several seeds legitimately reports 0.0, and that is still
+    a repeated-measurement experiment. All-zero is surfaced as an
+    advisory at record time (possible unpropagated seeds) and flagged
+    by the evidence_policy_consistency integrity check — suspicion is
+    an audit signal, not an admission verdict.
+
+    Trials whose design cannot produce repeated-measurement variance
+    declare evidence_policy.regime='single_measurement' with a
+    rationale at design_experiment — before execution, never after
+    seeing the result.
+    """
+    if not isinstance(variance, dict) or not variance:
+        return (
+            "Reproducibility is the price of admission: variance was "
+            "not measured (required under the default "
+            "repeated-measurement regime). If the computation is "
+            "deterministic or repetition is meaningless, declare "
+            "evidence_policy={'regime': 'single_measurement', "
+            "'rationale': ...} at design_experiment — the declaration "
+            "is sealed into the bundle at capture and cannot be "
+            "introduced retrospectively."
+        )
     return None
 
 

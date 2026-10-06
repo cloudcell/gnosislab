@@ -365,7 +365,12 @@ class TestCommitment7Reproducibility:
             assert "variance" in result["error"].lower() or "reproducibility" in result["error"].lower()
 
     @pytest.mark.asyncio
-    async def test_rejects_zero_variance(self, client, store):
+    async def test_accepts_measured_zero_variance(self, client, store):
+        """plan-20261006-2058Z: a measured variance of 0.0 is admitted —
+        a deterministic system under several seeds legitimately reports
+        zero. Admission carries an audit advisory (possible unpropagated
+        seeds); refusal is reserved for variance that was never
+        measured (None/empty)."""
         async with client:
             pid, hid = await setup_programme_with_hypothesis(client)
             tid = await setup_trial_with_bundle(client, pid, hid)
@@ -378,7 +383,9 @@ class TestCommitment7Reproducibility:
                 "variance": {"val_accuracy": 0},
                 "spatiotemporal_region": "gpu-0",
             })
-            assert "error" in result
+            assert "error" not in result
+            assert result["status"] == "recorded"
+            assert any("zero" in w for w in result.get("warnings", []))
 
 
 # --- Commitment 8: Programmes, not runs ---

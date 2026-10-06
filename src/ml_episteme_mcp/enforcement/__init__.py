@@ -10,8 +10,9 @@ from .commitments import (
     check_hypothesis_exists,
     check_hypothesis_testable,
     check_loop_is_unit,
+    check_evidence_policy,
     check_memory_precedes_optimization,
-    check_reproducibility,
+    check_uncertainty_requirements,
 )
 
 __all__ = [
@@ -20,10 +21,11 @@ __all__ = [
     "check_budget_remaining",
     "check_bundle_controlled",
     "check_duplicate_conclusion",
+    "check_evidence_policy",
     "check_falsifiability",
     "check_hypothesis_exists",
     "check_hypothesis_testable",
     "check_loop_is_unit",
     "check_memory_precedes_optimization",
-    "check_reproducibility",
+    "check_uncertainty_requirements",
 ]

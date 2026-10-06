@@ -59,8 +59,14 @@ LOOP_STEPS = [
         "step": 4,
         "name": "design_experiment",
         "tool": "design_experiment",
-        "description": "Design a trial (configuration) within the programme.",
-        "inputs": ["programme_id", "hypothesis_id", "config"],
+        "description": (
+            "Design a trial (configuration) within the programme. "
+            "Optional evidence_policy declares the evidence regime "
+            "up front — default 'repeated_measurement' requires "
+            "measured variance; 'single_measurement' needs a rationale "
+            "and is sealed into the bundle."
+        ),
+        "inputs": ["programme_id", "hypothesis_id", "config", "evidence_policy?"],
         "outputs": ["trial_id"],
     },
     {
@@ -97,8 +103,12 @@ LOOP_STEPS = [
         "step": 7,
         "name": "record_observation",
         "tool": "record_observation",
-        "description": "Record the metrics and variance from the trial.",
-        "inputs": ["trial_id", "metrics", "variance", "spatiotemporal_region"],
+        "description": (
+            "Record the metrics — and the variance required by the "
+            "trial's sealed evidence policy (measured variance under "
+            "the default regime; omittable under single_measurement)."
+        ),
+        "inputs": ["trial_id", "metrics", "spatiotemporal_region", "variance?"],
         "outputs": ["observation_id"],
     },
     {
@@ -137,10 +147,14 @@ FAILURE_HANDLING = [
     "write it while executor_output_json carries no execution verdict "
     "(exit_code/status/stdout/...). An executor that returns nothing "
     "recordable finalizes as 'failed', never 'completed'.",
-    "All-zero variance is rejected: n identical outcomes are one "
-    "effective measurement (a point estimate), not reproducibility. "
-    "For genuinely identical results, report per-seed values in "
-    "metrics or an SE estimate — never variance={...: 0}.",
+    "Under the default repeated-measurement regime, variance must be "
+    "MEASURED: an absent or empty mapping is refused, while a measured "
+    "zero is admitted (deterministic systems legitimately report 0.0) "
+    "and flagged for audit — identical outcomes can mean seeds never "
+    "reached the computation. If replication is not the uncertainty "
+    "representation for this design, declare evidence_policy="
+    "{'regime': 'single_measurement', 'rationale': ...} at "
+    "design_experiment — before execution, never after the result.",
     "Do not report variance on a different metric (e.g. runtime) to "
     "pass the gate while the primary metric was never measured.",
     "mark_retryable is for infrastructure faults only (lost output, "
@@ -181,7 +195,7 @@ TOOL_CATALOG = [
     {"name": "wait_trial", "category": "trial", "description": "Wait server-side for a terminal trial status (≤60s — replaces the get_trial_status polling loop)"},
     {"name": "list_trials", "category": "trial", "description": "List a programme's trials (id recovery)"},
     # Observation
-    {"name": "record_observation", "category": "observation", "description": "Record metrics and variance"},
+    {"name": "record_observation", "category": "observation", "description": "Record observation evidence per the sealed policy"},
     # Belief
     {"name": "update_belief", "category": "belief", "description": "Update the belief state"},
     # Assessment

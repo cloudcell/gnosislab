@@ -32,7 +32,13 @@ def register(mcp, store: StateStore) -> None:
                 ),
                 "returns": {
                     "metrics": "dict[str, float] — measured values (e.g. val_accuracy, val_perplexity)",
-                    "variance": "dict[str, float] — variance across seeds (required by commitment 7)",
+                    "variance": (
+                        "dict[str, float] — variance per metric across "
+                        "repeated measurements; required under the "
+                        "default repeated-measurement evidence regime "
+                        "(a measured zero is valid). Omit under a "
+                        "declared single_measurement regime."
+                    ),
                 },
                 "failure": (
                     "Failure must be visible as a NONZERO EXIT or an "
@@ -236,6 +242,13 @@ def register(mcp, store: StateStore) -> None:
                     "id": t.id,
                     "hypothesis_id": t.hypothesis_id,
                     "config": json.loads(t.config_json),
+                    # the declared evidence regime — NULL on legacy
+                    # trials reads as the repeated-measurement default
+                    "evidence_policy": (
+                        json.loads(t.evidence_policy_json)
+                        if getattr(t, "evidence_policy_json", None)
+                        else {"version": 1, "regime": "repeated_measurement"}
+                    ),
                     "bundle_id": t.bundle_id,
                     "status": t.status.value,
                     "created_at": t.created_at,

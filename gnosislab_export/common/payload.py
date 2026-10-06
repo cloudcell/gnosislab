@@ -43,7 +43,8 @@ def write_payload(
                         {
                             "id": o.id,
                             "metrics": o.metrics,
-                            "variance": o.variance,
+                            "variance": o.variance,  # null = not measured
+                            "evidence_policy": o.evidence_policy,
                             "created_at": o.created_at,
                         }
                         for o in obs

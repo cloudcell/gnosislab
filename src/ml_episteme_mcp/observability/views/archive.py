@@ -502,14 +502,22 @@ def render_archived_trial_detail(
         except Exception:
             metrics = {}
         try:
-            variance = json.loads(o.get("variance_json", "{}")) if o.get("variance_json") else {}
+            # JSON null = variance not measured (single_measurement
+            # regime); distinct from a measured-zero mapping.
+            variance = json.loads(o.get("variance_json", "null")) if o.get("variance_json") else None
         except Exception:
             variance = {}
+        try:
+            policy = json.loads(o.get("evidence_policy_json", "{}")) if o.get("evidence_policy_json") else {}
+        except Exception:
+            policy = {}
+        regime = policy.get("regime", "repeated_measurement")
         obs_rows.append(f"""
         <tr id="obs-{escape(o['id'])}">
             <td>{link_id(o['id'])}</td>
             <td>{render_json_pretty(metrics)}</td>
-            <td>{render_json_pretty(variance)}</td>
+            <td>{render_json_pretty(variance) if variance is not None else '<span class="muted">not measured</span>'}</td>
+            <td>{escape(regime)}</td>
             <td>{escape(o.get('spatiotemporal_region', '—'))}</td>
             <td>{format_timestamp(o.get('created_at'))}</td>
         </tr>""")
@@ -543,6 +551,10 @@ def render_archived_trial_detail(
                     f'<a href="#code-{escape(eh[:12])}"><span class="hash-prefix">{escape(eh)}</span></a>'
                 )
             extra_hash_html = f'<tr><th>Extra Code Hashes</th><td>{", ".join(extra_links)}</td></tr>'
+        try:
+            bundle_policy = json.loads(b["evidence_policy_json"]) if b.get("evidence_policy_json") else {"regime": "repeated_measurement"}
+        except Exception:
+            bundle_policy = {"_malformed": b.get("evidence_policy_json")}
         bundle_html += f"""
         <table id="bundle">
             <tr><th>Bundle ID</th><td><a href="#bundle"><code>{escape(b['id'])}</code></a></td></tr>
@@ -554,6 +566,7 @@ def render_archived_trial_detail(
             <tr><th>Splits</th><td>{render_json_pretty(splits)}</td></tr>
             <tr><th>Data Refs</th><td>{link_ids(data_ref_ids)}</td></tr>
             <tr><th>Baseline</th><td>{link_id(b.get('baseline_ref'))}</td></tr>
+            <tr><th>Evidence Policy</th><td>{render_json_pretty(bundle_policy)}</td></tr>
         </table>"""
 
     # Data refs
@@ -626,7 +639,7 @@ def render_archived_trial_detail(
     <div class="section">
         <h2>Observations ({len(observations)})</h2>
         <table>
-            <thead><tr><th>ID</th><th>Metrics</th><th>Variance</th><th>Region</th><th>Created</th></tr></thead>
+            <thead><tr><th>ID</th><th>Metrics</th><th>Variance</th><th>Regime</th><th>Region</th><th>Created</th></tr></thead>
             <tbody>
                 {''.join(obs_rows) if obs_rows else '<tr><td colspan="5" class="muted">No observations.</td></tr>'}
             </tbody>

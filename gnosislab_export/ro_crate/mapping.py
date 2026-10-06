@@ -8,6 +8,8 @@ Collection, conclusion → AssessAction, executor → SoftwareApplication.
 
 from __future__ import annotations
 
+import json
+
 from ..common.paths import artifact_path, code_path, results_path
 from ..common.validation import redact
 from ..common.snapshot import (
@@ -140,6 +142,19 @@ def map_trial(
         },
         "identifier": trial.id,
         "description": redact(f"config: {trial.config}"),
+        # the declared evidence regime is part of the design — export
+        # it as a property, resolved to the default when the trial
+        # predates the column (NULL = repeated_measurement)
+        "additionalProperty": [
+            {
+                "@type": "PropertyValue",
+                "name": "evidence_policy",
+                "value": json.dumps(
+                    trial.evidence_policy
+                    or {"version": 1, "regime": "repeated_measurement"}
+                ),
+            },
+        ],
     }
     if trial.started_at:
         action["startTime"] = trial.started_at

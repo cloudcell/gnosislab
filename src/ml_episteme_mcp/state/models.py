@@ -16,6 +16,7 @@ Ontological categories per b-01 §2.1:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -59,6 +60,58 @@ class Verdict(str, Enum):
     accepted = "accepted"
     rejected = "rejected"
     inconclusive = "inconclusive"
+
+
+class EvidenceRegime(str, Enum):
+    """The declared evidence-admission regime for a trial.
+
+    - repeated_measurement: empirical uncertainty is estimated from
+      repeated observations; measured variance per metric is required.
+      This is the default.
+    - single_measurement: repeated-observation variance is not
+      required; the rationale must state the alternative evidential
+      basis. Supplied variance is still stored verbatim — the regime
+      describes the evidence basis, not a sample count of one.
+    """
+
+    repeated_measurement = "repeated_measurement"
+    single_measurement = "single_measurement"
+
+
+EVIDENCE_POLICY_VERSION = 1
+
+
+def default_evidence_policy() -> dict[str, Any]:
+    """The policy that governs when nothing was declared."""
+    return {
+        "version": EVIDENCE_POLICY_VERSION,
+        "regime": EvidenceRegime.repeated_measurement.value,
+    }
+
+
+def canonical_evidence_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a declared policy to its stored form: every stored
+    copy carries version + regime so the record stays self-describing
+    across archives and exports."""
+    canonical = dict(policy)
+    canonical.setdefault("version", EVIDENCE_POLICY_VERSION)
+    canonical.setdefault(
+        "regime", EvidenceRegime.repeated_measurement.value
+    )
+    return canonical
+
+
+def parse_evidence_policy(raw: str | None) -> dict[str, Any]:
+    """Decode a stored evidence_policy_json column.
+
+    NULL (legacy rows, undeclared policies) reads as the default
+    repeated-measurement policy — existing experiments are never
+    silently reinterpreted. Raises ValueError on malformed JSON;
+    callers at enforcement boundaries should treat that as fail-closed.
+    """
+    if raw is None:
+        return default_evidence_policy()
+    return json.loads(raw)
 
 
 # --- Ontological metadata (Rule 5.1: single terminal category) ---
@@ -173,6 +226,14 @@ class Bundle(BaseModel):
     )
     baseline_ref: str | None = Field(
         default=None, description="Reference to the baseline configuration"
+    )
+    evidence_policy_json: str | None = Field(
+        default=None,
+        description="Sealed snapshot of the trial's declared evidence "
+        "policy (canonical JSON: version + regime + rationale). NULL on "
+        "legacy bundles reads as the repeated-measurement default. The "
+        "seal makes the declared evidence contract part of what did "
+        "not move (commitment 5 / a-00 §5.7).",
     )
     created_at: str = Field(default_factory=_utc_now)
 
@@ -295,6 +356,14 @@ class Trial(BaseModel):
         "attribution, set by mark_retryable (a retried trial must be "
         "answerable to 'why, and by whom').",
     )
+    evidence_policy_json: str | None = Field(
+        default=None,
+        description="The declared evidence policy (canonical JSON: "
+        "version + regime + rationale), set at design_experiment — "
+        "what counts as admissible evidence is part of the design, "
+        "decided before execution (commitment 5 / a-00 §5.7). NULL on "
+        "legacy trials reads as the repeated-measurement default.",
+    )
     created_at: str = Field(default_factory=_utc_now)
 
     ontological_category: str = "data item"
@@ -317,7 +386,18 @@ class Observation(BaseModel):
         ..., description="JSON dict of measured values (data items about qualities)"
     )
     variance_json: str = Field(
-        ..., description="JSON dict of variance across seeds (commitment 7)"
+        ...,
+        description="JSON dict of variance per metric across repeated "
+        "measurements (commitment 5 default regime). JSON null means "
+        "variance was not measured — distinct from a measured zero "
+        "such as {\"metric\": 0.0}.",
+    )
+    evidence_policy_json: str | None = Field(
+        default=None,
+        description="Snapshot of the sealed evidence policy this "
+        "observation was admitted under (canonical JSON: version + "
+        "regime + rationale) — the observation is self-describing in "
+        "provenance. NULL on legacy rows reads as repeated-measurement.",
     )
     spatiotemporal_region: str = Field(
         ..., description="Where+when the run occurred (4D footprint)"

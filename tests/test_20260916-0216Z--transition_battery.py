@@ -1475,11 +1475,13 @@ class TestContentAddressedExecution:
                 assert "/tmp/ml_sci_shared_cfg.json" in w["literal"]
                 assert w["line"] is not None
 
-                # clean code captures with no warnings
+                # clean code captures with no warnings — two seeds so
+                # the repeated-measurement policy advisory (single-seed
+                # bundles may not satisfy it) does not fire either
                 tid2 = await design_trial(s, pid, hid)
                 cap2 = await ok(s, "capture_bundle", {
                     "trial_id": tid2, "code_ref": TRAIN_STUB,
-                    "env_ref": "uv@0.10", "seeds": [7],
+                    "env_ref": "uv@0.10", "seeds": [7, 8],
                     "splits": {"train": "/tmp/train.csv"},
                 })
                 assert cap2["warnings"] == []
