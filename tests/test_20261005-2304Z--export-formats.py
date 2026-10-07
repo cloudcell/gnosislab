@@ -45,7 +45,11 @@ def test_jsonld_structure(stores, tmp_path):
     assert "ro-crate-metadata.json" not in graph
     assert "./" not in graph
     assert graph["#trial/trl-t1"]["@type"] == "CreateAction"
-    assert graph["#claim/clm-t1"]["isBasedOn"] == {"@id": "#trial/trl-t1"}
+    # claim isBasedOn resolves to the trial's results payload, which the
+    # jsonld export also writes — the ref resolves in both formats
+    assert graph["#claim/clm-t1"]["isBasedOn"] == {
+        "@id": "payload/results/trl-t1.json"
+    }
     assert "#conclusion/cnc-t1" in graph
     assert "#gnosislab" in graph
 
@@ -170,10 +174,13 @@ def test_rocrate_descriptor_license_cc0(stores, tmp_path):
             (crate / "ro-crate-metadata.json").read_text()
         )["@graph"]
     }
-    # descriptor is always CC0; dataset has no license unless declared
+    # descriptor is always CC0; the dataset's license is a spec MUST,
+    # so an undeclared license is stated explicitly, not omitted
     desc = graph["ro-crate-metadata.json"]
     assert desc["license"] == {"@id": "https://spdx.org/licenses/CC0-1.0"}
-    assert "license" not in graph["./"]
+    assert graph["./"]["license"] == (
+        "No license declared — all rights reserved"
+    )
 
     crate2 = export_rocrate(
         snap, tmp_path / "crate2", license_uri="https://spdx.org/licenses/CC-BY-4.0"

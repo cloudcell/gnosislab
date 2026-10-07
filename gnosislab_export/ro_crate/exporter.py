@@ -30,7 +30,9 @@ from .profile import CONFORMS_TO, GNOSISLAB_AGENT
 CONTEXT = "https://w3id.org/ro/crate/1.3/context"
 
 
-def _edge_targets(snapshot: Snapshot) -> dict[str, list[dict]]:
+def _edge_targets(
+    snapshot: Snapshot, result_trial_ids: set[str]
+) -> dict[str, list[dict]]:
     """Resolve claim-edge to_refs to graph nodes.
 
     A ref pointing into the snapshot links to the mapped entity; a ref
@@ -40,27 +42,52 @@ def _edge_targets(snapshot: Snapshot) -> dict[str, list[dict]]:
     ids = snapshot.entity_ids()
     by_from: dict[str, list[dict]] = defaultdict(list)
     for e in snapshot.claim_edges:
-        if e.to_ref in ids or e.ref_type == "claim":
-            node = {"@id": f"#claim/{e.to_ref}"} if e.ref_type == "claim" else None
-            if node is None:
-                node = _entity_node_id(e.to_ref, snapshot)
-            by_from[e.from_claim].append(node)
+        if e.ref_type == "claim" and e.to_ref in ids:
+            by_from[e.from_claim].append({"@id": f"#claim/{e.to_ref}"})
+        elif e.to_ref in ids:
+            by_from[e.from_claim].append(
+                _entity_node_id(e.to_ref, snapshot, result_trial_ids)
+            )
+        elif e.ref_type == "claim":
+            # dangling claim ref — a stub is emitted for it below
+            by_from[e.from_claim].append({"@id": f"#claim/{e.to_ref}"})
         else:
             by_from[e.from_claim].append({"@id": f"#external/{e.to_ref}"})
     return by_from
 
 
-def _entity_node_id(ref: str, snapshot: Snapshot) -> dict:
+def _entity_node_id(
+    ref: str, snapshot: Snapshot, result_trial_ids: set[str]
+) -> dict:
+    """Map an internal entity id to the graph node a citation resolves to.
+
+    `isBasedOn` targets must be CreativeWork-compatible, so a cited trial
+    resolves to its results payload (the evidence the claim rests on) and
+    a cited conclusion to the verdict that carries its content. A trial
+    without results resolves to the CreateAction node — resolvable, even
+    if a strict profile warns on the type.
+    """
+    if any(t.id == ref for t in snapshot.trials):
+        return {"@id": (
+            m.results_path(ref) if ref in result_trial_ids
+            else f"#trial/{ref}"
+        )}
     for coll, prefix in (
-        (snapshot.trials, "#trial/"),
         (snapshot.observations, "#observation/"),
+        (snapshot.bundles, "#bundle/"),
         (snapshot.programmes, "#programme/"),
         (snapshot.hypotheses, "#hypothesis/"),
-        (snapshot.conclusions, "#conclusion/"),
+        (snapshot.conclusions, "#verdict/"),
         (snapshot.data_refs, "#dataref/"),
     ):
         if any(x.id == ref for x in coll):
             return {"@id": f"{prefix}{ref}"}
+    for s in snapshot.code_snippets:
+        if s.code_hash == ref:
+            return {"@id": m.code_path(s.code_hash, s.language)}
+    for a in snapshot.artifacts:
+        if a.content_hash == ref:
+            return {"@id": m.artifact_path(a.content_hash, a.filename)}
     return {"@id": f"#external/{ref}"}
 
 
@@ -84,6 +111,7 @@ def build_graph(
         {
             "@id": "ro-crate-metadata.json",
             "@type": "CreativeWork",
+            "name": "RO-Crate Metadata Descriptor",
             "conformsTo": [{"@id": c} for c in CONFORMS_TO],
             "about": {"@id": "./"},
             # the descriptor is generated metadata — always CC0 so a
@@ -102,15 +130,18 @@ def build_graph(
             "exported from a gnosislab deployment."
         ),
         "dateCreated": snapshot.captured_at,
+        "datePublished": snapshot.captured_at,
+        # the spec makes license a MUST — when the user declares none the
+        # crate says so explicitly rather than omitting the field
+        "license": (
+            {"@id": license_uri}
+            if license_uri
+            else "No license declared — all rights reserved"
+        ),
         "hasPart": [{"@id": p} for p in payload_ids],
         "mentions": [{"@id": "#gnosislab"}]
         + [{"@id": f"#programme/{p.id}"} for p in snapshot.programmes],
-        "publisher": {"@id": "#gnosislab"},
     }
-    if license_uri:
-        # payload is the user's experiment record — the exporter only
-        # stamps a data license when the user declares one
-        root["license"] = {"@id": license_uri}
     if issues:
         root["additionalProperty"] = [
             {
@@ -169,29 +200,51 @@ def build_graph(
 
     ids = snapshot.entity_ids()
     for c in snapshot.conclusions:
-        graph.append(m.map_conclusion(c, c.evidence_ref in ids))
+        if c.evidence_ref in ids:
+            obj = _entity_node_id(c.evidence_ref, snapshot, result_trials)
+        else:
+            # evidence_ref is free text — mint a per-conclusion stub so
+            # `object` never points at a garbage narrative-as-IRI
+            obj = {"@id": f"#evidence/{c.id}"}
+            graph.append(m.map_evidence_stub(c))
+        graph.append(m.map_conclusion(c, obj))
         graph.append(m.map_verdict(c))
 
     graph += [m.map_dataref(d) for d in snapshot.data_refs]
+    graph += [m.map_observation(o) for o in snapshot.observations]
+    graph += [m.map_bundle(b) for b in snapshot.bundles]
+    graph.append(m.map_manifest_file())
 
-    edge_targets = _edge_targets(snapshot)
+    edge_targets = _edge_targets(snapshot, result_trials)
     graph += [
         m.map_claim(c, edge_targets.get(c.id, [])) for c in snapshot.claims
     ]
-    # external-ref stubs keep dangling edges visible
+    # stubs keep dangling edges visible; CreativeWork keeps them
+    # isBasedOn-compatible, and duplicate edges share one stub
+    stub_ids: set[str] = set()
     for e in snapshot.claim_edges:
-        if e.to_ref not in ids:
-            graph.append(
-                {
-                    "@id": f"#external/{e.to_ref}",
-                    "@type": "Thing",
-                    "identifier": e.to_ref,
-                    "description": (
-                        "Referenced entity outside this export's scope "
-                        "(incomplete provenance, recorded not dropped)."
-                    ),
-                }
-            )
+        if e.to_ref in ids:
+            continue
+        stub_id = (
+            f"#claim/{e.to_ref}"
+            if e.ref_type == "claim"
+            else f"#external/{e.to_ref}"
+        )
+        if stub_id in stub_ids:
+            continue
+        stub_ids.add(stub_id)
+        graph.append(
+            {
+                "@id": stub_id,
+                "@type": "CreativeWork",
+                "name": f"external reference {e.to_ref}",
+                "identifier": e.to_ref,
+                "description": (
+                    "Referenced entity outside this export's scope "
+                    "(incomplete provenance, recorded not dropped)."
+                ),
+            }
+        )
     return graph
 
 

@@ -122,7 +122,10 @@ def test_rocrate_structure(stores, tmp_path):
     # trial → CreateAction with instrument/object/result
     action = graph["#trial/trl-t1"]
     assert action["@type"] == "CreateAction"
-    assert action["agent"] == {"@id": "#gnosislab"}
+    # schema.org agent is Person|Organization — the executor software
+    # is an instrument, not an agent
+    assert {"@id": "#gnosislab"} in action["instrument"]
+    assert {"@id": "payload/code/aabbcc.py"} in action["instrument"]
     assert action["actionStatus"]["@id"].endswith("CompletedActionStatus")
 
     # code, artifact, results payload written + referenced
@@ -132,9 +135,10 @@ def test_rocrate_structure(stores, tmp_path):
     assert art_ids and (crate / art_ids[0]).read_bytes() == b"\x89PNG"
     assert (crate / "payload/results/trl-t1.json").exists()
 
-    # claim + isBasedOn → the trial entity
+    # claim + isBasedOn → the trial's results payload (the evidence the
+    # claim rests on; the CreateAction node is not isBasedOn-compatible)
     claim = graph["#claim/clm-t1"]
-    assert claim["isBasedOn"] == {"@id": "#trial/trl-t1"}
+    assert claim["isBasedOn"] == {"@id": "payload/results/trl-t1.json"}
 
     # conclusion → AssessAction → verdict CreativeWork
     assert graph["#conclusion/cnc-t1"]["@type"] == "AssessAction"

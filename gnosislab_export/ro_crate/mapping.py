@@ -106,10 +106,105 @@ def map_artifact(a: Artifact) -> dict:
 def map_results_file(trial: Trial, obs: list[Observation]) -> dict:
     return {
         "@id": results_path(trial.id),
-        "@type": "File",
+        # File = data entity; Dataset marks it CreativeWork-compatible
+        # so claim `isBasedOn` edges that resolve to the trial's output
+        # satisfy schema.org range checks
+        "@type": ["File", "Dataset"],
         "name": f"results {trial.id}",
         "encodingFormat": "application/json",
         "about": {"@id": f"#trial/{trial.id}"},
+    }
+
+
+def map_manifest_file() -> dict:
+    return {
+        "@id": "payload/MANIFEST.json",
+        "@type": "File",
+        "name": "gnosislab export manifest",
+        "encodingFormat": "application/json",
+        "description": (
+            "gnosislab-internal manifest: payload digests, export issues, "
+            "and snapshot metadata. Not part of the RO-Crate spec."
+        ),
+    }
+
+
+def map_observation(o: Observation) -> dict:
+    props = [
+        {"@type": "PropertyValue", "name": "trial_id", "value": o.trial_id},
+        {
+            "@type": "PropertyValue",
+            "name": "metrics",
+            "value": json.dumps(o.metrics),
+        },
+        {
+            "@type": "PropertyValue",
+            "name": "variance",
+            # null variance is meaningful (single_measurement regime) —
+            # exported as an explicit marker, never fabricated
+            "value": (
+                json.dumps(o.variance)
+                if o.variance is not None
+                else "not measured"
+            ),
+        },
+    ]
+    if o.evidence_policy is not None:
+        props.append(
+            {
+                "@type": "PropertyValue",
+                "name": "evidence_policy",
+                "value": json.dumps(o.evidence_policy),
+            }
+        )
+    return {
+        "@id": f"#observation/{o.id}",
+        # Dataset ⊆ CreativeWork — valid as an isBasedOn target
+        "@type": "Dataset",
+        "name": f"observation {o.id}",
+        "identifier": o.id,
+        "dateCreated": o.created_at,
+        # the observation is carried inside the trial's results file
+        "isPartOf": {"@id": results_path(o.trial_id)},
+        "additionalProperty": props,
+    }
+
+
+def map_bundle(b: Bundle) -> dict:
+    props = [
+        {"@type": "PropertyValue", "name": "trial_id", "value": b.trial_id},
+        {
+            "@type": "PropertyValue",
+            "name": "code_ref",
+            "value": f"sha256:{b.code_ref}",
+        },
+        {"@type": "PropertyValue", "name": "env_ref", "value": b.env_ref},
+        {
+            "@type": "PropertyValue",
+            "name": "seeds",
+            "value": json.dumps(b.seeds),
+        },
+        {
+            "@type": "PropertyValue",
+            "name": "splits",
+            "value": json.dumps(b.splits),
+        },
+    ]
+    if b.evidence_policy is not None:
+        props.append(
+            {
+                "@type": "PropertyValue",
+                "name": "evidence_policy",
+                "value": json.dumps(b.evidence_policy),
+            }
+        )
+    return {
+        "@id": f"#bundle/{b.id}",
+        "@type": "CreativeWork",
+        "name": f"sealed bundle {b.id}",
+        "identifier": b.id,
+        "dateCreated": b.created_at,
+        "additionalProperty": props,
     }
 
 
@@ -128,11 +223,19 @@ def map_trial(
     result: list[dict] = [{"@id": a["@id"]} for a in artifact_entities]
     if has_results:
         result.append({"@id": results_path(trial.id)})
+    # schema.org `agent` range is Person|Organization — the executor
+    # software belongs in `instrument` (the tool that performed the
+    # action), alongside the sealed code bundle
+    instrument: list[dict] = [{"@id": "#gnosislab"}]
+    if code_hash:
+        # the sealed bundle IS the instrument that ran (spec: scripts
+        # are referenced as SoftwareSourceCode instruments)
+        instrument.insert(0, {"@id": code_path(code_hash, code_language)})
     action = {
         "@id": f"#trial/{trial.id}",
         "@type": "CreateAction",
         "name": f"trial {trial.id}",
-        "agent": {"@id": "#gnosislab"},
+        "instrument": instrument,
         "object": obj,
         "result": result,
         "actionStatus": {
@@ -160,24 +263,15 @@ def map_trial(
         action["startTime"] = trial.started_at
     if trial.finished_at:
         action["endTime"] = trial.finished_at
-    if code_hash:
-        # the sealed bundle IS the instrument that ran (spec: scripts
-        # are referenced as SoftwareSourceCode instruments)
-        action["instrument"] = {"@id": code_path(code_hash, code_language)}
     return action
 
 
-def map_conclusion(c: Conclusion, evidence_internal: bool) -> dict:
-    obj = (
-        {"@id": f"#trial/{c.evidence_ref}"}
-        if evidence_internal
-        else {"@id": f"#evidence/{c.evidence_ref}"}
-    )
+def map_conclusion(c: Conclusion, obj: dict) -> dict:
     return {
         "@id": f"#conclusion/{c.id}",
         "@type": "AssessAction",
         "name": f"conclusion {c.id}: {redact(c.verdict)}",
-        "agent": {"@id": "#gnosislab"},
+        "instrument": {"@id": "#gnosislab"},
         "object": obj,
         "result": {
             "@id": f"#verdict/{c.id}",
@@ -197,6 +291,19 @@ def map_conclusion(c: Conclusion, evidence_internal: bool) -> dict:
                 "value": c.evidence_ref,
             },
         ],
+    }
+
+
+def map_evidence_stub(c: Conclusion) -> dict:
+    return {
+        "@id": f"#evidence/{c.id}",
+        "@type": "CreativeWork",
+        "name": f"evidence cited by conclusion {c.id}",
+        "text": redact(c.evidence_ref),
+        "description": (
+            "Free-text evidence reference outside this export's entity "
+            "graph (recorded not dropped)."
+        ),
     }
 
 
@@ -237,6 +344,7 @@ def map_claim(c: Claim, edges_for: list) -> dict:
     e = {
         "@id": f"#claim/{c.id}",
         "@type": "CreativeWork",
+        "name": f"claim {c.id}",
         "text": redact(c.content),
         "identifier": c.id,
         "dateCreated": c.created_at,

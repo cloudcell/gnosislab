@@ -184,6 +184,21 @@ entry timestamps are commit times in **UTC**.
 
 ### Fixed
 
+- **RO-Crate export conformance** — a `ro-crate-validator` import of a
+  full export surfaced four structural defects, all fixed: claim
+  `isBasedOn`/`object` edges pointed at entities that were never emitted
+  (`#observation/*`, `#external/bundle-*` — ids in `entity_ids()` but
+  absent from `_entity_node_id`'s map so the stub emitter skipped them —
+  and `#evidence/<narrative>` IRIs minted from free-text `evidence_ref`),
+  `payload/MANIFEST.json` was listed in `hasPart` without a graph entity,
+  `agent`/`publisher` carried the `SoftwareApplication` executor outside
+  its schema.org range (now `instrument`, and observations/bundles are
+  emitted as `Dataset`/`CreativeWork` entities with stubs typed
+  `CreativeWork` so `isBasedOn` targets stay range-compatible), and the
+  root dataset omitted the spec-mandatory `license`/`datePublished`
+  (license is now stated explicitly as "No license declared" when the
+  user passes none). *(2026-10-07 22:20Z)*
+
 - **`close_campaign` zero-divisor** — a zero champion-arm mean now
   refuses with the observed means and names `abandon_campaign`,
   instead of writing `promotion_score=0.0` (the camp-532d7b60 bug;
