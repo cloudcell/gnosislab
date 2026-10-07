@@ -145,7 +145,12 @@ def build_document(snapshot: Snapshot, issues: list[str]) -> dict:
             "prov:generatedAtTime": _ts(d.created_at),
         }
         if d.source_uri:
-            e["prov:atLocation"] = d.source_uri
+            if d.source_uri.startswith("file://"):
+                # a file:// URI is an absolute host path — host paths
+                # stay home; the sha256 hash carries the real identity
+                e["gl:sourceLocation"] = "local file (host path redacted)"
+            else:
+                e["prov:atLocation"] = d.source_uri
         if d.content_hash:
             e["gl:sha256"] = d.content_hash
         entity[f"gl:dataref/{d.id}"] = e

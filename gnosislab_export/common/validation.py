@@ -27,6 +27,9 @@ class ValidationError(RuntimeError):
 
 
 _ABS_PATH = re.compile(r"(?<![:/\w])/(?:[\w.\-~]+/)+[\w.\-]*")
+# `file:///` URIs embed an absolute host path the generic pattern's
+# scheme-boundary lookbehind deliberately skips
+_FILE_URI = re.compile(r"file:///(?:[\w.\-~]+/)*[\w.\-]*")
 
 
 def redact(text: str) -> str:
@@ -36,7 +39,9 @@ def redact(text: str) -> str:
     code, artifacts) are the experiment record and travel verbatim;
     the paths inside them are what the run actually used.
     """
-    return _ABS_PATH.sub("<host-path>", text)
+    return _ABS_PATH.sub(
+        "<host-path>", _FILE_URI.sub("file:///<host-path>", text)
+    )
 
 
 def _scan_secrets(name: str, value: str) -> None:
@@ -64,6 +69,8 @@ def _iter_strings(snapshot: Snapshot):
         yield ("code_snippet.code_text", s.code_text)
     for cl in snapshot.claims:
         yield ("claim.content", cl.content)
+    for d in snapshot.data_refs:
+        yield ("data_ref.source_uri", d.source_uri or "")
 
 
 def check(snapshot: Snapshot) -> list[str]:
@@ -75,14 +82,21 @@ def check(snapshot: Snapshot) -> list[str]:
         if isinstance(value, str) and "/" in value:
             # ANY absolute host path must not travel; the issue names
             # the FIELD only — recording the path would re-leak it
-            if _ABS_PATH.search(value):
+            if _FILE_URI.search(value):
+                issues.append(f"local file URI in {name} (path redacted)")
+            elif _ABS_PATH.search(value):
                 issues.append(f"absolute path in {name} (redacted)")
 
     # Dangling provenance: refs pointing outside the snapshot. Reported
     # (exported visibly incomplete), not fatal.
     for b in snapshot.bundles:
         if b.code_ref not in {s.code_hash for s in snapshot.code_snippets}:
-            issues.append(f"bundle {b.id}: code_ref {b.code_ref} not in snapshot")
+            # code_ref may be a legacy host path — scrub before it lands
+            # in the manifest/issues strings
+            issues.append(
+                f"bundle {b.id}: code_ref {redact(b.code_ref)} "
+                "not in snapshot"
+            )
     for t in snapshot.trials:
         if t.bundle_id and t.bundle_id not in {b.id for b in snapshot.bundles}:
             issues.append(f"trial {t.id}: bundle_id {t.bundle_id} not in snapshot")

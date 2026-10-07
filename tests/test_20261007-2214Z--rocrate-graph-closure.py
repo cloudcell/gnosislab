@@ -101,7 +101,8 @@ def test_root_dataset_required_fields(stores, tmp_path):
     graph, _ = _graph(crate)
 
     root = graph["./"]
-    assert "license" in root  # spec MUST — declared or explicit refusal
+    assert root["license"] == {"@id": "#license"}  # spec MUST, as a ref
+    assert graph["#license"]["@type"] == "CreativeWork"
     assert "datePublished" in root
     # a SoftwareApplication is not a valid publisher/agent
     assert root.get("publisher") != {"@id": "#gnosislab"}
@@ -175,6 +176,72 @@ def test_every_entity_has_a_name(stores, tmp_path):
     assert unnamed == []
     # dangling ref emits a CreativeWork stub that still resolves
     assert "#external/obs-gone" in graph
+
+
+def test_claim_edge_to_resultless_trial_resolves(stores, tmp_path):
+    """A cited trial with no results payload gets a record stand-in —
+    isBasedOn never points at a bare CreateAction."""
+    epi, ana = stores
+    conn = sqlite3.connect(epi)
+    conn.execute(
+        "INSERT INTO trials VALUES "
+        "('trl-noresults','prog-t1','hyp-t1','{}',NULL,'failed',"
+        "3.0,NULL,NULL,'2026-10-01T00:06:00Z','2026-10-01T00:06:03Z',"
+        "NULL,'2026-10-01T00:05:50Z')"
+    )
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(ana)
+    conn.execute(
+        "INSERT INTO claim_edges VALUES "
+        "('edg-nr','clm-t1','trl-noresults','trial','derived_from','src',"
+        "'2026-10-01T00:06:10Z')"
+    )
+    conn.commit()
+    conn.close()
+    snap = load_snapshot(epi, ana, programme_id="prog-t1")
+    crate = export_rocrate(snap, tmp_path / "crate")
+    graph, _ = _graph(crate)
+
+    claim = graph["#claim/clm-t1"]
+    targets = claim["isBasedOn"]
+    targets = targets if isinstance(targets, list) else [targets]
+    refs = {t["@id"] for t in targets}
+    assert "#trial-record/trl-noresults" in refs
+    assert "#trial/trl-noresults" not in refs
+    rec = graph["#trial-record/trl-noresults"]
+    assert "Dataset" in rec["@type"]
+    assert rec["about"] == {"@id": "#trial/trl-noresults"}
+
+
+def test_file_uri_source_redacted(stores, tmp_path):
+    """data_ref.source_uri=file:///… is an absolute host path — it must
+    not travel into the descriptor; the content hash is the identity."""
+    epi, ana = stores
+    conn = sqlite3.connect(epi)
+    conn.execute(
+        "INSERT INTO data_refs VALUES "
+        "('dr-f1','train','static',NULL,NULL,NULL,"
+        "'file:///home/x/secret/data.csv','deadbeef',NULL,NULL,NULL,"
+        "NULL,NULL,100,10,NULL,'none','2026-10-01T00:07:00Z')"
+    )
+    conn.execute(
+        "UPDATE bundles SET data_refs_json='[\"dr-f1\"]' "
+        "WHERE id='bnd-t1'"
+    )
+    conn.commit()
+    conn.close()
+    snap = load_snapshot(epi, ana, programme_id="prog-t1")
+    crate = export_rocrate(snap, tmp_path / "crate")
+    descriptor = (crate / "ro-crate-metadata.json").read_text()
+    graph = {e["@id"]: e for e in json.loads(descriptor)["@graph"]}
+
+    assert "/home/x" not in descriptor
+    dr = graph["#dataref/dr-f1"]
+    assert "isBasedOn" not in dr
+    assert "url" not in dr
+    manifest = json.loads((crate / "payload/MANIFEST.json").read_text())
+    assert any("data_ref.source_uri" in i for i in manifest["integrity_issues"])
 
 
 def test_claim_edge_to_internal_bundle_resolves(stores, tmp_path):

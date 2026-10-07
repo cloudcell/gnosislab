@@ -62,15 +62,14 @@ def _entity_node_id(
     """Map an internal entity id to the graph node a citation resolves to.
 
     `isBasedOn` targets must be CreativeWork-compatible, so a cited trial
-    resolves to its results payload (the evidence the claim rests on) and
-    a cited conclusion to the verdict that carries its content. A trial
-    without results resolves to the CreateAction node — resolvable, even
-    if a strict profile warns on the type.
+    resolves to its results payload (the evidence the claim rests on),
+    or to a record stand-in when the trial produced no output, and a
+    cited conclusion resolves to the verdict that carries its content.
     """
     if any(t.id == ref for t in snapshot.trials):
         return {"@id": (
             m.results_path(ref) if ref in result_trial_ids
-            else f"#trial/{ref}"
+            else f"#trial-record/{ref}"
         )}
     for coll, prefix in (
         (snapshot.observations, "#observation/"),
@@ -131,13 +130,9 @@ def build_graph(
         ),
         "dateCreated": snapshot.captured_at,
         "datePublished": snapshot.captured_at,
-        # the spec makes license a MUST — when the user declares none the
-        # crate says so explicitly rather than omitting the field
-        "license": (
-            {"@id": license_uri}
-            if license_uri
-            else "No license declared — all rights reserved"
-        ),
+        # the spec makes license a MUST — when the user declares none a
+        # contextual entity says so explicitly rather than omitting it
+        "license": {"@id": license_uri if license_uri else "#license"},
         "hasPart": [{"@id": p} for p in payload_ids],
         "mentions": [{"@id": "#gnosislab"}]
         + [{"@id": f"#programme/{p.id}"} for p in snapshot.programmes],
@@ -213,7 +208,24 @@ def build_graph(
     graph += [m.map_dataref(d) for d in snapshot.data_refs]
     graph += [m.map_observation(o) for o in snapshot.observations]
     graph += [m.map_bundle(b) for b in snapshot.bundles]
+    graph += [
+        m.map_trial_record(t)
+        for t in snapshot.trials
+        if t.id not in result_trials
+    ]
     graph.append(m.map_manifest_file())
+    if not license_uri:
+        graph.append(
+            {
+                "@id": "#license",
+                "@type": "CreativeWork",
+                "name": "No license declared",
+                "description": (
+                    "No license was declared for this export — all "
+                    "rights reserved."
+                ),
+            }
+        )
 
     edge_targets = _edge_targets(snapshot, result_trials)
     graph += [

@@ -9,6 +9,7 @@ Collection, conclusion → AssessAction, executor → SoftwareApplication.
 from __future__ import annotations
 
 import json
+import re
 
 from ..common.paths import artifact_path, code_path, results_path
 from ..common.validation import redact
@@ -129,6 +130,27 @@ def map_manifest_file() -> dict:
     }
 
 
+def map_trial_record(t: Trial) -> dict:
+    """Citable stand-in for a trial that produced no results payload.
+
+    A claim may cite a trial that recorded no observations — its basis
+    is the run record itself, not an output file. The record node is
+    CreativeWork-compatible so `isBasedOn` stays within its range.
+    """
+    return {
+        "@id": f"#trial-record/{t.id}",
+        "@type": "Dataset",
+        "name": f"trial record {t.id}",
+        "identifier": t.id,
+        "dateCreated": t.created_at,
+        "about": {"@id": f"#trial/{t.id}"},
+        "description": (
+            "No results payload was recorded for this trial; this record "
+            "is its citable representation."
+        ),
+    }
+
+
 def map_observation(o: Observation) -> dict:
     props = [
         {"@type": "PropertyValue", "name": "trial_id", "value": o.trial_id},
@@ -171,14 +193,25 @@ def map_observation(o: Observation) -> dict:
 
 
 def map_bundle(b: Bundle) -> dict:
+    # code_ref is a sha256 on current records but a host path on legacy
+    # ones — only the hash form gets the scheme prefix; paths redact
+    code_ref = (
+        f"sha256:{b.code_ref}"
+        if re.fullmatch(r"[0-9a-f]{64}", b.code_ref)
+        else redact(b.code_ref)
+    )
     props = [
         {"@type": "PropertyValue", "name": "trial_id", "value": b.trial_id},
         {
             "@type": "PropertyValue",
             "name": "code_ref",
-            "value": f"sha256:{b.code_ref}",
+            "value": code_ref,
         },
-        {"@type": "PropertyValue", "name": "env_ref", "value": b.env_ref},
+        {
+            "@type": "PropertyValue",
+            "name": "env_ref",
+            "value": redact(b.env_ref),
+        },
         {
             "@type": "PropertyValue",
             "name": "seeds",
@@ -331,8 +364,16 @@ def map_dataref(d: DataRef) -> dict:
         ],
     }
     if d.source_uri:
-        e["isBasedOn"] = {"@id": d.source_uri}
-        e["url"] = d.source_uri
+        if d.source_uri.startswith("file://"):
+            # a file:// URI is an absolute host path — host paths stay
+            # home; the sha256 content hash carries the real identity
+            e["description"] = (
+                "Source is a local file (host path redacted); identity "
+                "is the sha256 content hash."
+            )
+        else:
+            e["isBasedOn"] = {"@id": d.source_uri}
+            e["url"] = d.source_uri
     if d.content_hash:
         e["identifier"] = f"sha256:{d.content_hash}"
     if d.size_bytes is not None:

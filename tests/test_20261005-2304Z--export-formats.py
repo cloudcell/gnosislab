@@ -175,12 +175,11 @@ def test_rocrate_descriptor_license_cc0(stores, tmp_path):
         )["@graph"]
     }
     # descriptor is always CC0; the dataset's license is a spec MUST,
-    # so an undeclared license is stated explicitly, not omitted
+    # so an undeclared license is a named contextual entity, not omitted
     desc = graph["ro-crate-metadata.json"]
     assert desc["license"] == {"@id": "https://spdx.org/licenses/CC0-1.0"}
-    assert graph["./"]["license"] == (
-        "No license declared — all rights reserved"
-    )
+    assert graph["./"]["license"] == {"@id": "#license"}
+    assert graph["#license"]["name"] == "No license declared"
 
     crate2 = export_rocrate(
         snap, tmp_path / "crate2", license_uri="https://spdx.org/licenses/CC-BY-4.0"
