@@ -8,6 +8,7 @@
 **Turn hypotheses into experiments, experiments into evidence, and evidence into auditable conclusions.**
 
 [![DOI](https://zenodo.org/badge/1401154499.svg)](https://doi.org/10.5281/zenodo.23128199)
+[![SSRN](https://img.shields.io/badge/SSRN-preprint-blue)](https://doi.org/10.2139/ssrn.7573878)
 [![CI](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/gnosislab?label=PyPI&cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
 [![Python](https://img.shields.io/pypi/pyversions/gnosislab?cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
@@ -17,7 +18,7 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/gnosislab?period=total&units=NONE&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/gnosislab)
 [![Discord](https://img.shields.io/discord/903850592957517835?logo=discord&label=Discord)](https://discord.com/invite/v9JVtpVuUT)
 
-[Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers) · [Discord](https://discord.gg/v9JVtpVuUT)
+[Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers) · [Paper](https://doi.org/10.2139/ssrn.7573878) · [Discord](https://discord.gg/v9JVtpVuUT)
 
 </div>
 
@@ -587,6 +588,26 @@ The difficult part is preserving the chain between:
 **what was proposed → what was done → what was observed → what counts as evidence → what may reasonably be concluded**
 
 GnosisLab exists to make that chain a first-class object.
+
+---
+
+## Paper
+
+The GnosisLab design and the evidence-policy machinery are described in:
+
+> Bikeyev, A. (2026). *GnosisLab: A Verifiable Foundation for Autonomous
+> Scientific Discovery*. SSRN.
+> <https://doi.org/10.2139/ssrn.7573878>
+
+```bibtex
+@misc{bikeyev2026gnosislab,
+  author = {Bikeyev, Alexander},
+  title  = {GnosisLab: A Verifiable Foundation for Autonomous Scientific Discovery},
+  year   = {2026},
+  howpublished = {SSRN},
+  doi    = {10.2139/ssrn.7573878},
+}
+```
 
 ---
 
