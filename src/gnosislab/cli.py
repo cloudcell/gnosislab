@@ -601,13 +601,18 @@ def _export(argv: list[str]) -> int:
               "use '--full --format ro-crate'", file=sys.stderr)
         return 2
     if fmt != "tarball":
+        from datetime import datetime, timezone
+
         from gnosislab_export.cli import main as export_main
+        # same <UTC>-prefix convention as sxport/<UTC>-<slug>.tar.gz —
+        # exports are append-only records, never overwritten in place
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%MZ")
         if full:
             args = ["--full", "--format", fmt,
-                    "--out", "sxport/full-rocrate"]
+                    "--out", f"sxport/{stamp}-full-{fmt}"]
         else:
             args = ["--programme", slug, "--format", fmt,
-                    "--out", f"sxport/{slug}-rocrate"]
+                    "--out", f"sxport/{stamp}-{slug}-{fmt}"]
         if zip_flag:
             args.append("--zip")
         return export_main(args)
