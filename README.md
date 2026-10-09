@@ -392,27 +392,9 @@ It is an attempt to make the **process around AI-assisted research explicit, ins
 ---
 
 ## How GnosisLab compares
-
 Against adjacent systems, including autonomous-research agents, agent frameworks, reproducibility tools, and experiment trackers, GnosisLab is distinguished not by any single capability but by their integration: scientific objects are represented as first-class state, methodological constraints are enforced at runtime, execution provenance is bound to the research record, and the stored record is reconciled against what actually executed.
 
-| Verification / scientific-method capability | **GnosisLab** | autoresearch | AIPOCH | EvoScientist | Paper2Agent | Wisp | LangChain | AutoGPT | DVC / MLflow |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Hypotheses as first-class objects** | **✓** | — | ◐ | ◐ | — | — | — | — | — |
-| **Experiments as first-class scientific objects** | **✓** | ◐ | ◐ | ◐ | ◐ | — | — | — | ◐ |
-| **Observations separated from interpretation** | **✓** | — | — | — | — | — | — | — | — |
-| **Explicit evidence objects** | **✓** | — | ◐ | ◐ | ◐ | — | — | — | ◐ |
-| **Claims linked explicitly to evidence** | **✓** | — | — | — | — | — | — | — | — |
-| **Explicit scientific state transitions** | **✓** | — | — | — | — | — | — | — | — |
-| **Methodological constraints enforced at runtime** | **✓** | ◐ | — | — | — | — | — | — | — |
-| **Invalid scientific actions can be refused** | **✓** | ◐ | — | — | — | — | — | — | — |
-| **Execution provenance bound to research state** | **✓** | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ✓ |
-| **Sealed experimental artifacts** | **✓** | — | — | — | — | — | — | — | — |
-| **Experimental information boundaries enforced** | **✓** | — | — | — | — | — | — | — | — |
-| **Attempted violations become auditable events** | **✓** | — | — | — | — | — | — | — | — |
-| **Stored record reconciled with live execution** | **✓** | — | — | — | — | — | — | — | — |
-| **Standing integrity / invariant checks** | **✓** | — | — | — | — | — | — | — | — |
-| **Scientific state independent of the LLM agent** | **✓** | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ✓ |
-| **Verification is the primary architectural objective** | **✓** | — | ◐ | — | ◐ | — | — | — | ◐ |
+<img src="docs-pub/alternatives-overview.png" alt="Comparison of verification and scientific-method capabilities: GnosisLab vs autoresearch, AIPOCH, EvoScientist, Paper2Agent, Wisp, LangChain, AutoGPT, and DVC/MLflow" width="100%">
 
 **Legend:** ✓ = native or core capability; ◐ = partial, indirect, configurable, or implementation-dependent; — = not a core capability or not evidenced in the compared system.
 
