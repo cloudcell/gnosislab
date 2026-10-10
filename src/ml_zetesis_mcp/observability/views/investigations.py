@@ -173,6 +173,9 @@ def render_investigation_detail(
         )
         finding_cards += f"""
         <div class="card" id="find-{escape(f.id)}">
+            <p class="muted" style="font-size: 0.8rem; margin-bottom: 0.3rem">
+                <a class="mono" href="#find-{escape(f.id)}">{escape(f.id)}</a>
+            </p>
             <p style="font-size: 1.0rem; margin-bottom: 0.5rem">{escape(f.content)}</p>
             <p>
                 <span class="status status-{escape(f.status.value)}">{escape(f.status.value)}</span>
