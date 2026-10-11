@@ -12,7 +12,10 @@ substitute as single arguments — never shell strings.
 from __future__ import annotations
 
 import re
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:     # Python < 3.11
+    import tomli as tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
