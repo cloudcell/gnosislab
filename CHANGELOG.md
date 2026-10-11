@@ -8,6 +8,15 @@ entry timestamps are commit times in **UTC**.
 
 ### Added
 
+- **`gnosislab init <dir>`** — scaffolds a fully isolated workspace:
+  sandbox `home/` (service DBs + opencode session store land inside
+  the folder), a registered free port sub-block (services `28N00`–
+  `28N49`, console `283xx`; allocations recorded in
+  `~/.config/gnosislab/workspaces.json`), a complete `daemon.toml`
+  (env redirect + exec/session agent profiles), materialized driver
+  copies, a sourceable `env` file, and a runnable `task.md` +
+  `verify.py` pair. `source <dir>/env` scopes `gnosislab start all`,
+  `daemon` ops, and the `opencode` TUI to the sandbox.
 - **Daemon agent-agnostic backends** (e-plan 20261011-0152Z, review
   PASS 20261011-0208Z) — `src/gnosislab_daemon/backends/` introduces
   the `AgentBackend` seam with two transports behind the same
@@ -18,9 +27,11 @@ entry timestamps are commit times in **UTC**.
     JSONL protocol: `ready` handshake with declared capabilities,
     `send`/`status`/`cancel`/`fork`/`shutdown` ops, `turn_id`-
     correlated `turn_end` boundaries, 1 MiB frame cap, protocol-major
-    and lifecycle validation. `examples/drivers/` ships
+    and lifecycle validation. `gnosislab_daemon/drivers/` ships
     `fake_session_driver.py` (the executable conformance spec) and
-    reference drivers `opencode_service.py` / `llm_chat.py`.
+    reference drivers `opencode_service.py` / `llm_chat.py` inside the
+    wheel — `gnosislab init` materializes editable copies into each
+    workspace's `.daemon/drivers/`.
   - Durable turn phases (`intent → dispatched → turn_ended`) persisted
     before the wire write; a driver death mid-turn parks `BLOCKED`
     with `uncertain_turn` — at-least-once, never a blind re-dispatch.

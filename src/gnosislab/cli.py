@@ -836,6 +836,10 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
                                  export.jsonld)
   gnosislab export  --full --format ro-crate|prov|jsonld [--zip]
                                  export the whole store's provenance
+  gnosislab init    <dir>        scaffold an isolated workspace:
+                                 sandbox HOME, own port sub-block,
+                                 daemon.toml + drivers + task/checker
+                                 — 'source <dir>/env' to enter it
   gnosislab daemon  <cmd>        resident per-state-root supervisor
                                  (agent loops + service control + export)
                                  — 'gnosislab daemon --help' for commands
@@ -903,6 +907,12 @@ def main() -> None:
         sys.exit(_setup(sys.argv[2:]))
     if cmd == "export":
         sys.exit(_export(sys.argv[2:]))
+    if cmd == "init":
+        from gnosislab.workspace import init_workspace
+        if target == "all" or not sys.argv[2:]:
+            print("gnosislab init <dir> [--force]", file=sys.stderr)
+            sys.exit(2)
+        sys.exit(init_workspace(target, force="--force" in sys.argv[3:]))
     if cmd == "daemon":
         from gnosislab_daemon.commands import main as daemon_main
         sys.exit(daemon_main(sys.argv[2:]))

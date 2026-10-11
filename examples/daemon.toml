@@ -41,6 +41,10 @@ start = ["my-agent", "--prompt", "{prompt}"]
 # argv elements: {workdir} {session_id} {state_dir} {loop_id}
 # {config_dir} (the dir of the daemon.toml defining this profile).
 #
+# Reference drivers ship inside the package (gnosislab_daemon/drivers/).
+# `gnosislab init <dir>` materializes editable copies into
+# <dir>/.daemon/drivers/ and wires this profile for you:
+#
 # [agents.opencode_service]
 # mode = "session"
 # driver = ["python3", "{config_dir}/drivers/opencode_service.py",

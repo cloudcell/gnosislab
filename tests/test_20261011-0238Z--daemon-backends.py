@@ -1,8 +1,8 @@
 """daemon agent-agnostic backends: verdict contract, check tool,
 session protocol conformance, fork lineage, crash reconciliation.
 
-Conformance fixture: examples/drivers/fake_session_driver.py — the
-executable protocol spec every real driver is measured against.
+Conformance fixture: gnosislab_daemon/drivers/fake_session_driver.py
+— the executable protocol spec every real driver is measured against.
 """
 
 import ast
@@ -21,9 +21,10 @@ from gnosislab_daemon.session_driver import (
     PROTOCOL, ProtocolError, SessionDriver)
 from gnosislab_daemon.state import StateRoot
 
+from gnosislab_daemon import drivers as _drivers_pkg
+
 FAKE_DRIVER = str(
-    Path(__file__).resolve().parent.parent
-    / "examples" / "drivers" / "fake_session_driver.py")
+    Path(_drivers_pkg.__file__).parent / "fake_session_driver.py")
 
 CHECK_SRC = """\
 import os, sys

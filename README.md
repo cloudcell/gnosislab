@@ -341,7 +341,11 @@ The daemon never trusts an agent's claim of completion: after every invocation i
 Two agent backends fill the same verified-loop contract (`src/gnosislab_daemon/backends/`):
 
 - **`exec`** (default): one CLI subprocess per turn; process exit is the turn boundary. Strongest isolation.
-- **`session`**: a persistent *driver* process per loop, controlled over a stdio JSONL protocol (`send`/`status`/`cancel`/`fork`/`shutdown` ops; `ready`/`turn_end`/`session` events). The driver owns all vendor details — any agentic IDE or a bare LLM endpoint works by writing one small adaptor. `examples/drivers/` ships the protocol conformance fixture (`fake_session_driver.py`) plus reference drivers for opencode and an OpenAI-compatible chat endpoint.
+- **`session`**: a persistent *driver* process per loop, controlled over a stdio JSONL protocol (`send`/`status`/`cancel`/`fork`/`shutdown` ops; `ready`/`turn_end`/`session` events). The driver owns all vendor details — any agentic IDE or a bare LLM endpoint works by writing one small adaptor. `gnosislab_daemon/drivers/` ships the protocol conformance fixture (`fake_session_driver.py`) plus reference drivers for opencode and an OpenAI-compatible chat endpoint.
+
+### Isolated workspaces
+
+`gnosislab init <dir>` scaffolds a self-contained experiment sandbox in one command: its own HOME (service databases, opencode sessions), its own service port sub-block and daemon console (registered in `~/.config/gnosislab/workspaces.json` so workspaces can't collide), its own driver copies, and a runnable task + verdict checker. `source <dir>/env` puts a shell inside it — `gnosislab start all`, `daemon serve`, and the `opencode` TUI all resolve the sandbox stack.
 
 The turn boundary is *never* a verdict: `turn_end` (or process exit) only ends the turn — the independent checker still decides. Structured checker diagnostics are supported via a `GNOSISLAB_VERDICT` JSON line (bounded, sanitized; contradictions fail closed as `CHECK_ERROR`), stagnation can trigger a single capability-gated session fork with recorded lineage, and a driver that dies mid-turn parks the loop `BLOCKED` with `uncertain_turn` rather than risking a silent duplicate dispatch.
 
