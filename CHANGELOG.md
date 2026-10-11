@@ -15,8 +15,15 @@ entry timestamps are commit times in **UTC**.
   `~/.config/gnosislab/workspaces.json`), a complete `daemon.toml`
   (env redirect + exec/session agent profiles), materialized driver
   copies, a sourceable `env` file, and a runnable `task.md` +
-  `verify.py` pair. `source <dir>/env` scopes `gnosislab start all`,
-  `daemon` ops, and the `opencode` TUI to the sandbox.
+  `verify.py` pair.
+- **`gnosislab up` / `down` / `run`** — workspace lifecycle without
+  env knowledge: `up` finds the workspace from cwd (or an explicit
+  dir), spawns `daemon serve` detached, wires the sandbox
+  `opencode.json`, and brings the five services up on the sandbox
+  block; `down` tears it all down; `run <cmd>` execs a command inside
+  the workspace env (`gnosislab run opencode` opens the TUI on the
+  sandbox MCP servers + session store). `source env` still works but
+  is never required.
 - **Daemon agent-agnostic backends** (e-plan 20261011-0152Z, review
   PASS 20261011-0208Z) — `src/gnosislab_daemon/backends/` introduces
   the `AgentBackend` seam with two transports behind the same

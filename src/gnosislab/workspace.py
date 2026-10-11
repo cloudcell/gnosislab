@@ -27,6 +27,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -191,17 +192,19 @@ folder. Delete the folder and the whole stack is gone.
 ## Run it
 
 ```bash
-source {env_path}                 # shell now inside the sandbox
-gnosislab start all               # service stack -> home/.ml-*
-gnosislab daemon serve --state-dir .daemon   # terminal 1
+gnosislab up          # services + daemon, detached — that's it
 
 gnosislab daemon start --agent opencode_service \\
     --task task.md --workdir work \\
-    --state-dir .daemon --check {root}/verify.py    # terminal 2
+    --state-dir .daemon --check {root}/verify.py
 
-tail -f .daemon/loops/loop-001/events.jsonl   # live opencode events
-opencode                                      # TUI on the same session DB
+tail -f .daemon/loops/loop-*/events.jsonl   # live opencode events
+gnosislab run opencode                      # TUI inside the sandbox
+gnosislab down                              # tear it all down
 ```
+
+(`source {env_path}` still works if you want a shell fully inside
+the sandbox — `up`/`down`/`run` never need it.)
 
 Console: http://127.0.0.1:{console_port}/ — token in
 `.daemon/management-token`.
@@ -353,7 +356,156 @@ def init_workspace(target: str, *, force: bool = False) -> int:
     print(f"workspace: {root}")
     print(f"  console  :{console}   services {block}-{block + 49}"
           f"   (registered in {REGISTRY})")
-    print(f"\n  source {root / 'env'}")
-    print(f"  gnosislab start all")
-    print(f"  gnosislab daemon serve --state-dir {daemon_dir}")
+    print(f"\n  cd {root} && gnosislab up")
     return 0
+
+
+# --- running the workspace: no env knowledge required --------------------
+#
+# `up`/`down`/`run` read the sandbox env out of .daemon/daemon.toml
+# themselves — the user never needs to `source env` (the file stays for
+# shells that want it, e.g. running the opencode TUI by hand).
+
+def _find_root(target: str | None) -> Path | None:
+    """Explicit dir, GNOSISLAB_WORKSPACE, or nearest parent with
+    .daemon/daemon.toml."""
+    if target:
+        root = Path(target).expanduser().resolve()
+        return root if (root / ".daemon" / "daemon.toml").is_file() \
+            else None
+    if os.environ.get("GNOSISLAB_WORKSPACE"):
+        root = Path(os.environ["GNOSISLAB_WORKSPACE"]).resolve()
+        if (root / ".daemon" / "daemon.toml").is_file():
+            return root
+    here = Path.cwd().resolve()
+    for cand in (here, *here.parents):
+        if (cand / ".daemon" / "daemon.toml").is_file():
+            return cand
+    return None
+
+
+def _ws_env(root: Path) -> dict[str, str]:
+    """The workspace's environment: process env + [daemon.env] overlay."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+    raw = tomllib.loads((root / ".daemon" / "daemon.toml").read_text())
+    env = dict(os.environ)
+    env.update({str(k): str(v)
+                for k, v in raw.get("daemon", {}).get("env", {}).items()})
+    env["GNOSISLAB_WORKSPACE"] = str(root)
+    return env
+
+
+def _console_port(root: Path) -> int:
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+    raw = tomllib.loads((root / ".daemon" / "daemon.toml").read_text())
+    return int(raw.get("daemon", {}).get("port", 38100))
+
+
+def _pid_alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _gnosislab() -> str:
+    """The same gnosislab entry point the user invoked."""
+    argv0 = Path(sys.argv[0])
+    return str(argv0 if argv0.is_file() else
+               shutil.which("gnosislab") or "gnosislab")
+
+
+def ws_up(target: str | None = None) -> int:
+    """Bring the whole workspace up: services + daemon, detached."""
+    root = _find_root(target)
+    if root is None:
+        print("gnosislab up: no workspace found — pass a dir or run "
+              "inside one (gnosislab init <dir> makes one)",
+              file=sys.stderr)
+        return 2
+    env = _ws_env(root)
+    os.environ.update(env)      # start_one/_home/_setup resolve sandbox
+    from gnosislab.cli import start_one, COMPONENTS, _setup
+
+    if not _pid_alive(_daemon_pid(root)):
+        log = (root / ".daemon" / "serve.log").open("a")
+        subprocess.Popen(
+            [_gnosislab(), "daemon", "serve", "--state-dir",
+             str(root / ".daemon")],
+            env=env, stdin=subprocess.DEVNULL, stdout=log,
+            stderr=subprocess.STDOUT, start_new_session=True)
+        log.close()
+    else:
+        print("daemon: already running")
+
+    _setup(["opencode"])          # writes sandbox opencode.json
+    rc = 0
+    for name in COMPONENTS:
+        rc |= start_one(name) or 0
+
+    port = _console_port(root)
+    for _ in range(40):
+        try:
+            socket.create_connection(("127.0.0.1", port), 0.5).close()
+            break
+        except OSError:
+            pass
+    print(f"\nconsole: http://127.0.0.1:{port}/"
+          f"   (token: {root / '.daemon' / 'management-token'})")
+    print(f"  gnosislab daemon start --agent opencode_service \\")
+    print(f"    --task task.md --workdir work --state-dir .daemon \\")
+    print(f"    --check {root}/verify.py")
+    print(f"  tail -f .daemon/loops/loop-*/events.jsonl")
+    print(f"  gnosislab run opencode     # TUI inside the sandbox")
+    return rc
+
+
+def _daemon_pid(root: Path) -> int | None:
+    try:
+        return int(json.loads(
+            (root / ".daemon" / "daemon.json").read_text())["pid"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def ws_down(target: str | None = None) -> int:
+    """Tear the workspace stack down: daemon first, then services."""
+    root = _find_root(target)
+    if root is None:
+        print("gnosislab down: no workspace found", file=sys.stderr)
+        return 2
+    env = _ws_env(root)
+    os.environ.update(env)
+    from gnosislab.cli import stop_one, COMPONENTS
+    subprocess.run([_gnosislab(), "daemon", "shutdown",
+                    "--state-dir", str(root / ".daemon")],
+                   env=env, capture_output=True)
+    rc = 0
+    for name in reversed(COMPONENTS):
+        rc |= stop_one(name) or 0
+    return rc
+
+
+def ws_run(argv: list[str]) -> int:
+    """Exec a command inside the workspace env — replaces this
+    process so interactive tools (opencode TUI, bash) get the tty."""
+    if not argv:
+        print("gnosislab run <cmd> [args...] — runs the command inside "
+              "the workspace env", file=sys.stderr)
+        return 2
+    root = _find_root(None)
+    if root is None:
+        print("gnosislab run: no workspace found — run inside one",
+              file=sys.stderr)
+        return 2
+    os.execvpe(argv[0], argv, _ws_env(root))
+    return 127  # unreachable

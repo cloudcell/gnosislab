@@ -839,7 +839,13 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
   gnosislab init    <dir>        scaffold an isolated workspace:
                                  sandbox HOME, own port sub-block,
                                  daemon.toml + drivers + task/checker
-                                 — 'source <dir>/env' to enter it
+  gnosislab up      [dir]        bring the workspace up: services +
+                                 daemon, detached (finds the workspace
+                                 from cwd — 'cd <dir>' first)
+  gnosislab down    [dir]        tear it down: daemon, then services
+  gnosislab run     <cmd...>     run a command inside the workspace env
+                                 (e.g. 'gnosislab run opencode' — the
+                                 TUI sees the sandbox MCPs + sessions)
   gnosislab daemon  <cmd>        resident per-state-root supervisor
                                  (agent loops + service control + export)
                                  — 'gnosislab daemon --help' for commands
@@ -913,6 +919,15 @@ def main() -> None:
             print("gnosislab init <dir> [--force]", file=sys.stderr)
             sys.exit(2)
         sys.exit(init_workspace(target, force="--force" in sys.argv[3:]))
+    if cmd == "up":
+        from gnosislab.workspace import ws_up
+        sys.exit(ws_up(None if target == "all" else target))
+    if cmd == "down":
+        from gnosislab.workspace import ws_down
+        sys.exit(ws_down(None if target == "all" else target))
+    if cmd == "run":
+        from gnosislab.workspace import ws_run
+        sys.exit(ws_run(sys.argv[2:]))
     if cmd == "daemon":
         from gnosislab_daemon.commands import main as daemon_main
         sys.exit(daemon_main(sys.argv[2:]))

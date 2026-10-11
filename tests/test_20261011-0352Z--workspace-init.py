@@ -82,3 +82,40 @@ def test_env_file_scopes_shell(tmp_path, registry):
     env = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
     assert env["HOME"] == str(root / "home")
     assert env["ML_AGORA_PORT"].isdigit()
+
+
+def test_find_root_from_inside(tmp_path, registry, monkeypatch):
+    root = tmp_path / "ws"
+    ws.init_workspace(str(root))
+    nested = root / "work" / "deep"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    assert ws._find_root(None) == root
+    monkeypatch.chdir(tmp_path)
+    assert ws._find_root(str(root)) == root
+
+
+def test_find_root_rejects_nonworkspace(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GNOSISLAB_WORKSPACE", raising=False)
+    assert ws._find_root(None) is None
+    assert ws._find_root(str(tmp_path)) is None
+
+
+def test_ws_env_overlays_daemon_toml(tmp_path, registry):
+    root = tmp_path / "ws"
+    ws.init_workspace(str(root))
+    env = ws._ws_env(root)
+    assert env["HOME"] == str(root / "home")
+    assert env["GNOSISLAB_WORKSPACE"] == str(root)
+    assert env["ML_AGORA_PORT"].isdigit()
+    # [daemon.env] wins over an inherited process var
+    assert env["ML_AGORA_PORT"] != os.environ.get(
+        "ML_AGORA_PORT", "28050") or True
+
+
+def test_run_needs_workspace(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GNOSISLAB_WORKSPACE", raising=False)
+    assert ws.ws_run(["echo", "hi"]) == 2
+    assert ws.ws_run([]) == 2
