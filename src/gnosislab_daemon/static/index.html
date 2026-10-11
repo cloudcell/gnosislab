@@ -92,7 +92,16 @@ async function refresh() {
   const tb = $("loops"); tb.replaceChildren();
   for (const l of (data && data.loops) || []) {
     const tr = document.createElement("tr");
-    const st = el("td", l.status); st.className = "status-" + l.status;
+    let label = l.status;
+    const flags = [];
+    if (l.mode === "session") flags.push("sess");
+    if (l.dispatch === "intent" || l.dispatch === "dispatched")
+      flags.push("turn " + l.turn_id);
+    if (l.needs_input) flags.push("needs input");
+    if (l.uncertain_turn) flags.push("uncertain");
+    if (l.parent_session_id) flags.push("forked");
+    if (flags.length) label += " · " + flags.join(" · ");
+    const st = el("td", label); st.className = "status-" + l.status;
     tr.append(el("td"), st, el("td"), el("td"), el("td"), el("td"), el("td"));
     tr.children[0].appendChild(el("code", l.id));
     tr.children[2].textContent = l.agent;

@@ -49,7 +49,19 @@ class LoopState:
     checker_argv: list[str]
     status: str = "created"
     watch: bool = False
+    mode: str = "exec"             # exec | session — recorded at create
     session_id: str | None = None
+    parent_session_id: str | None = None  # lineage after a session fork
+    turn_id: str = ""              # session-mode dispatch correlation
+    turn_seq: int = 0              # monotonics — persisted so turn_ids
+    # stay unique across daemon restarts
+    dispatch: str = ""             # ""|intent|dispatched|turn_ended —
+    # persisted BEFORE the write so a crash mid-turn is reconcilable
+    turn_reason: str = ""          # last turn_end reason, persisted at
+    # observation — survives a crash between turn_end and check
+    uncertain_turn: str = ""       # turn_id whose outcome is unknown —
+    # parks the loop BLOCKED rather than risk a duplicate dispatch
+    needs_input: bool = False      # agent asked for a human; parked
     context_note: str = ""
     attempts: int = 0
     active_pid: int | None = None

@@ -35,20 +35,36 @@ DEFAULT_LIMITS = {
     "check_timeout": 300,
     "feedback_bytes": 8192,
     "output_bytes": 65536,
+    "require_structured": 0,     # 1 = malformed GNOSISLAB_VERDICT is a
+    # CHECK_ERROR (strict checkers); 0 = fall back to plain tail
+    "driver_ready_seconds": 15,  # session-mode handshake bound
+    "driver_status_seconds": 30, # status-op response bound; bounds
+    # protocol RESPONSIVENESS only — never turn length
+    "shutdown_grace": 5,
 }
 
 
 @dataclass
 class AgentProfile:
     name: str
-    start: list[str]
+    start: list[str] | None = None
     resume: list[str] | None = None
     session_id_regex: str | None = None
+    fork: list[str] | None = None
+    mode: str = "exec"           # "exec" (argv per turn) | "session"
+    driver: list[str] | None = None   # session-mode driver argv
+    config_dir: str = ""         # dir of the daemon.toml that defined
+    # this profile — resolves {config_dir} in the driver argv
+
+    @property
+    def session_mode(self) -> bool:
+        return self.mode == "session"
 
     def argv(self, kind: str, prompt: str,
              session_id: str | None = None) -> list[str] | None:
         """Render a command template. Substitutions are whole-argument."""
-        tmpl = self.start if kind == "start" else self.resume
+        tmpl = {"start": self.start, "resume": self.resume,
+                "fork": self.fork}.get(kind)
         if tmpl is None:
             return None
         out = []
@@ -58,6 +74,18 @@ class AgentProfile:
                 if session_id is None:
                     return None
                 arg = arg.replace("{session_id}", session_id)
+            out.append(arg)
+        return out
+
+    def driver_argv(self, mapping: dict[str, str]) -> list[str] | None:
+        """Render the session-mode driver argv. Tokens substitute as
+        single argv elements — never shell-interpolated."""
+        if self.driver is None:
+            return None
+        out = []
+        for arg in self.driver:
+            for k, v in mapping.items():
+                arg = arg.replace("{" + k + "}", v)
             out.append(arg)
         return out
 
@@ -79,6 +107,9 @@ class DaemonConfig:
     # cannot touch another stack's ports or ~/.ml-* state
     limits: dict = field(default_factory=lambda: dict(DEFAULT_LIMITS))
     agents: dict[str, AgentProfile] = field(default_factory=dict)
+    expose_check_tool: bool = False   # opt-in NON-authoritative
+    # self-check helper in the agent workdir; the daemon's own check
+    # run remains the only verdict
 
 
 def _load_toml(path: Path) -> dict:
@@ -90,23 +121,41 @@ def _load_toml(path: Path) -> dict:
         raise ValueError(f"{path}: invalid TOML — {exc}") from exc
 
 
+def _argv_list(spec: dict, key: str, name: str, path: Path
+               ) -> list[str] | None:
+    val = spec.get(key)
+    if val is None:
+        return None
+    if not isinstance(val, list) or not all(
+            isinstance(a, str) for a in val):
+        raise ValueError(
+            f"{path}: agents.{name}.{key} must be an argv list")
+    return val
+
+
 def _parse_agents(raw: dict, path: Path) -> dict[str, AgentProfile]:
     agents: dict[str, AgentProfile] = {}
     for name, spec in raw.items():
-        start = spec.get("start")
-        if not isinstance(start, list) or not all(
-                isinstance(a, str) for a in start):
+        mode = spec.get("mode", "exec")
+        if mode not in ("exec", "session"):
+            raise ValueError(
+                f"{path}: agents.{name}.mode must be exec|session")
+        start = _argv_list(spec, "start", name, path)
+        driver = _argv_list(spec, "driver", name, path)
+        if mode == "exec" and start is None:
             raise ValueError(
                 f"{path}: agents.{name}.start must be an argv list")
-        resume = spec.get("resume")
-        if resume is not None and (
-                not isinstance(resume, list)
-                or not all(isinstance(a, str) for a in resume)):
+        if mode == "session" and driver is None:
             raise ValueError(
-                f"{path}: agents.{name}.resume must be an argv list")
+                f"{path}: agents.{name}.driver required "
+                "for mode=session")
         agents[name] = AgentProfile(
-            name=name, start=start, resume=resume,
-            session_id_regex=spec.get("session_id_regex"))
+            name=name, start=start,
+            resume=_argv_list(spec, "resume", name, path),
+            session_id_regex=spec.get("session_id_regex"),
+            fork=_argv_list(spec, "fork", name, path),
+            mode=mode, driver=driver,
+            config_dir=str(path.parent))
     return agents
 
 
@@ -136,4 +185,5 @@ def load(state_root: Path) -> DaemonConfig:
              for k, v in raw.get("env", {}).items()},
         limits=limits,
         agents=agents,
+        expose_check_tool=bool(raw.get("expose_check_tool", False)),
     )

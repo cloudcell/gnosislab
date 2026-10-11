@@ -31,3 +31,19 @@ def restart_prompt(task_text: str, check_tail: str, context_note: str,
     if context_note:
         base += f"\n\nContext from prior attempts:\n{context_note}"
     return base
+
+
+def fork_prompt(task_text: str, check_tail: str, max_bytes: int) -> str:
+    """Stagnation fork: a session branch with a fresh-strategy prompt —
+    the conversation forks, the filesystem does not roll back."""
+    tail = check_tail.encode("utf-8", "replace")[-max_bytes:] \
+        .decode("utf-8", "replace")
+    return (
+        f"{task_text}\n\n"
+        "---\n"
+        "Several consecutive attempts produced identical verification "
+        "output — the current approach is not converging. Reconsider "
+        "the strategy from scratch: question assumptions, take a "
+        "different path. The verifier's last output:\n\n"
+        f"{tail}"
+    )

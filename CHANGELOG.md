@@ -6,6 +6,45 @@ entry timestamps are commit times in **UTC**.
 
 ## [Unreleased]
 
+### Added
+
+- **Daemon agent-agnostic backends** (e-plan 20261011-0152Z, review
+  PASS 20261011-0208Z) — `src/gnosislab_daemon/backends/` introduces
+  the `AgentBackend` seam with two transports behind the same
+  checker-authoritative loop:
+  - `exec` — the existing CLI-subprocess turn, refactored onto
+    `ExecBackend` (spawn/drain/kill, own process group, TERM→grace→KILL).
+  - `session` — a persistent driver process per loop over a stdio
+    JSONL protocol: `ready` handshake with declared capabilities,
+    `send`/`status`/`cancel`/`fork`/`shutdown` ops, `turn_id`-
+    correlated `turn_end` boundaries, 1 MiB frame cap, protocol-major
+    and lifecycle validation. `examples/drivers/` ships
+    `fake_session_driver.py` (the executable conformance spec) and
+    reference drivers `opencode_service.py` / `llm_chat.py`.
+  - Durable turn phases (`intent → dispatched → turn_ended`) persisted
+    before the wire write; a driver death mid-turn parks `BLOCKED`
+    with `uncertain_turn` — at-least-once, never a blind re-dispatch.
+    `turn_end`/`agent_exit` is a boundary, never a verdict.
+  - `GNOSISLAB_VERDICT` structured checker diagnostics: bounded JSON
+    (16 KiB / 50 failures / sanitized fields); `pass` contradicting
+    the exit code → `CHECK_ERROR`; malformed →
+    `diagnostic_parse_error` event (hard error only under
+    `require_structured`). `failures[]` render into the continuation
+    prompt as data, not instructions.
+  - Capability-gated session fork at stagnation (one per episode):
+    exec via `fork` argv template, session via `fork` op — both record
+    `fork_requested`/`fork_created`/`fork_failed` and
+    `parent_session_id` lineage. Fork branches conversation state,
+    never files.
+  - `.gnosislab-check`: opt-in (`expose_check_tool`), explicitly
+    non-authoritative self-check helper — JSON-serialized argv +
+    `os.execvpe`, no shell; the daemon's own run remains the verdict.
+  - One active loop per resolved workdir (create-time lock) so file
+    changes stay attributable to a single writer; parked loops hold
+    no driver by construction (`_set` invariant).
+  - Console/API surface the honest state: `mode`, `turn_id`,
+    `dispatch` phase, `needs_input`, `uncertain_turn`, `forked`.
+
 ### Changed
 
 - **Default service block `38050–38091` → `28050–28091`** — the

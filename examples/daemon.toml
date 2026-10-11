@@ -21,11 +21,30 @@ resume = ["opencode", "run", "--session", "{session_id}", "--format", "json", "{
 # can continue the same conversation instead of restarting blind.
 session_id_regex = '"sessionID"\s*:\s*"([^"]+)"'
 
+# Optional stagnation fork: ONE session branch per stagnation episode.
+# The fork argv must still emit a parseable session id (captured via
+# session_id_regex). A fork branches conversation history only — it
+# never rolls back files. Verify the flag's semantics on your install.
+# fork = ["opencode", "run", "--fork", "--session", "{session_id}", "--format", "json", "{prompt}"]
+
 # An agent with no session-resume support: omit `resume`. The daemon
 # starts a fresh invocation each turn carrying the checker's output and
 # saved context, and the task still converges under verification.
 [agents.custom]
 start = ["my-agent", "--prompt", "{prompt}"]
+
+# --- session mode: a persistent driver process per loop -------------------
+# mode="session" spawns `driver` once and controls it over stdio
+# JSONL (see plan-20261011-0152Z). The driver owns ALL vendor details
+# (service connections, SDK state, history); the daemon only sends
+# send/status/cancel/fork/shutdown ops. Tokens substitute as single
+# argv elements: {workdir} {session_id} {state_dir} {loop_id}
+# {config_dir} (the dir of the daemon.toml defining this profile).
+#
+# [agents.opencode_service]
+# mode = "session"
+# driver = ["python3", "{config_dir}/drivers/opencode_service.py",
+#           "--workdir", "{workdir}", "--session", "{session_id}"]
 
 # --- per-instance daemon settings (<state-root>/daemon.toml) -------------
 
@@ -67,6 +86,16 @@ stagnation = 4              # identical checker outputs in a row → BLOCKED
 check_timeout = 300         # checker ceiling → CHECK_ERROR
 feedback_bytes = 8192       # checker output carried into next prompt
 output_bytes = 65536        # retained agent output per turn
+# require_structured = 0    # 1: malformed GNOSISLAB_VERDICT → CHECK_ERROR
+# driver_ready_seconds = 15  # session-mode handshake bound
+# driver_status_seconds = 30 # status-op response bound — bounds protocol
+                            # RESPONSIVENESS only, never turn length
+# shutdown_grace = 5         # driver shutdown op → SIGKILL after N s
+
+# expose_check_tool = false  # [daemon]-level, NOT limits: opt-in,
+# NON-authoritative ./.gnosislab-check helper in the agent workdir.
+# The agent may run or edit it — the daemon's own check run is the
+# only verdict, and it never executes the helper itself.
 
 # Per-experiment agent overrides may also appear here — they shadow the
 # global profiles for this state root only:

@@ -40,6 +40,7 @@ class Daemon:
         if profile is None:
             return None
         limits = dict(self.config.limits)
+        limits["expose_check_tool"] = int(self.config.expose_check_tool)
         limits.update(loop.limits or {})
         return LoopRunner(loop, self.root, profile, limits)
 
@@ -63,10 +64,20 @@ class Daemon:
             raise ValueError(f"task file not found: {task_file}")
         if not wd.is_dir():
             raise ValueError(f"workdir not found: {workdir}")
+        # one active write-producing loop per resolved workdir —
+        # otherwise file changes and checker results cannot be
+        # attributed to a single loop
+        resolved = str(wd.resolve())
+        for ls in self.root.list_loops():
+            if ls.workdir == resolved and ls.status in (
+                    "created", "running", "verifying", "paused"):
+                raise ValueError(
+                    f"workdir already owned by active loop {ls.id}")
         loop = LoopState(
             id=self.root.new_loop_id(), task_file=str(tf.resolve()),
-            task_hash=task_hash(tf), workdir=str(wd.resolve()),
-            agent=agent, checker_argv=list(checker_argv),
+            task_hash=task_hash(tf), workdir=resolved,
+            agent=agent, mode=self.config.agents[agent].mode,
+            checker_argv=list(checker_argv),
             watch=watch, limits=dict(limits or {}),
             created=utcnow(), cycle_started=utcnow(),
             status="created" if autostart else "paused",
