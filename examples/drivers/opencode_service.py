@@ -30,12 +30,16 @@ Usage (in a daemon profile):
 
 Env: OPENCODE_BIN overrides the binary path (default: `opencode`
 looked up on PATH). OPENCODE_MODEL is passed as --model when set.
+OPENCODE_RUN_ARGS is shlex-split and appended to every `run` argv —
+use it for provider/permission flags; the default already includes
+`--auto` (stdin is DEVNULL — a permission prompt would die on EOF).
 """
 
 import argparse
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -68,10 +72,12 @@ class OpencodeDriver:
         self.lock = threading.Lock()
         self.bin = os.environ.get("OPENCODE_BIN", "opencode")
         self.model = os.environ.get("OPENCODE_MODEL")
+        self.extra = shlex.split(os.environ.get(
+            "OPENCODE_RUN_ARGS", "--auto"))
 
     # -- turn lifecycle -------------------------------------------------
     def _argv(self, text: str) -> list[str]:
-        a = [self.bin, "run", "--format", "json"]
+        a = [self.bin, "run", "--format", "json", *self.extra]
         if self.model:
             a += ["--model", self.model]
         if self.session_id:
