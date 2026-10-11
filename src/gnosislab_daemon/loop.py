@@ -286,6 +286,8 @@ class LoopRunner:
         kind = ev.get("event")
         if kind == "ready":
             self.loop.session_id = ev.get("session_id")
+            self._await_ready = False          # handshake satisfied —
+            # the bound must not fire on an already-ready driver
             self.driver.note_ready(ev.get("capabilities") or {})
             self._emit("driver_ready",
                        capabilities=ev.get("capabilities"))

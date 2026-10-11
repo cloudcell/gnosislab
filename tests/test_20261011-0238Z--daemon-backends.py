@@ -312,6 +312,18 @@ def test_session_loop_ready_timeout_blocked(lab, monkeypatch):
     assert drive(d, lid, timeout=25) == "blocked"
 
 
+def test_session_ready_bound_clears_on_handshake(lab, monkeypatch):
+    """Regression: a ready driver that then takes >ready_seconds on
+    the turn must NOT trip 'no ready handshake' — the bound is only
+    for the handshake itself."""
+    monkeypatch.setenv("FAKE_DRIVER_SLOW", "6")
+    Path(os.environ["FAKE_SENTINEL"]).write_text("x")
+    d = make_daemon(lab, driver_ready_seconds=2,
+                    driver_status_seconds=60)
+    lid = start(d, lab)
+    assert drive(d, lid, timeout=60) == "verified"
+
+
 def test_session_loop_driver_death_uncertain(lab, monkeypatch):
     """Driver dies mid-turn → uncertain dispatch → check → BLOCKED,
     never a blind re-dispatch."""
