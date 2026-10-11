@@ -136,6 +136,28 @@ def test_sandbox_argv_injects_standalone():
     assert ws._sandbox_argv(["bash"]) == ["bash"]
 
 
+def test_ws_apply_env_scopes_service_commands(tmp_path, monkeypatch,
+                                              registry):
+    """`gnosislab start all` inside an init'd dir must resolve the
+    workspace's ports/home (no daemon, no `source env` needed); outside
+    any workspace it's a no-op."""
+    wsdir = tmp_path / "ws"
+    ws.init_workspace(str(wsdir))
+    monkeypatch.setenv("HOME", str(tmp_path / "outside-home"))
+    monkeypatch.delenv("GNOSISLAB_WORKSPACE", raising=False)
+
+    monkeypatch.chdir(wsdir)
+    expected = ws._ws_env(wsdir.resolve())
+    assert ws.ws_apply_env() == wsdir.resolve()
+    for key, val in expected.items():
+        assert os.environ[key] == val
+
+    # Outside: no workspace -> None, nothing applied.
+    monkeypatch.delenv("GNOSISLAB_WORKSPACE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert ws.ws_apply_env() is None
+
+
 def test_registry_ignores_home_redirect(tmp_path, monkeypatch):
     """`init` under a sourced workspace env must still register in the
     REAL home — a HOME-scoped registry double-allocates port blocks."""

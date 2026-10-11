@@ -617,6 +617,17 @@ def _ws_env(root: Path) -> dict[str, str]:
     return env
 
 
+def ws_apply_env() -> Path | None:
+    """If cwd/GNOSISLAB_WORKSPACE resolves to a workspace, overlay its
+    [daemon.env] onto this process — HOME, ML_*_PORT and all. Returns
+    the root, or None when invoked outside any workspace (callers then
+    run against the global config as before)."""
+    root = _find_root(None)
+    if root is not None:
+        os.environ.update(_ws_env(root))
+    return root
+
+
 def _console_port(root: Path) -> int:
     try:
         import tomllib

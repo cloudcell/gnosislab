@@ -883,6 +883,15 @@ def main() -> None:
         sys.exit(_version())
     if cmd == "upgrade":
         sys.exit(_upgrade())
+    # Service commands are workspace-aware: inside an init'd directory
+    # (or under GNOSISLAB_WORKSPACE) the workspace's [daemon.env]
+    # overlay — HOME, ML_*_PORT — applies before port/home resolution.
+    # `init`/`up`/`down`/`run`/`daemon` manage their own env.
+    if cmd in ("start", "stop", "status", "restart", "logs",
+               "dashboard", "gui", "config", "setup", "export"):
+        from gnosislab.workspace import ws_apply_env
+        ws_apply_env()
+
     if cmd in ("start", "stop", "status"):
         rc = 0
         for n in _resolve(target):
