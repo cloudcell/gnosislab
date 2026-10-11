@@ -65,6 +65,9 @@ DAEMON_TOML = """\
 listen = "127.0.0.1"
 port = {console_port}
 max_concurrent = 1
+expose_check_tool = true   # drops ./.gnosislab-check into the workdir
+# so the agent can run the same checker mid-turn — advisory only;
+# the daemon's own run remains the only verdict
 
 [daemon.env]
 HOME = "{home}"
@@ -132,6 +135,29 @@ Work autonomously: choose reasonable defaults, never pause to ask —
 there is no operator to answer. The task is done when the checker
 passes, not when you believe it is.
 """
+
+AGENTS_MD = """\
+# Verification contract
+
+This is a gnosislab workspace. Work is judged by an **independent
+checker**, never by your own assessment — do not stop on confidence.
+
+Before claiming any task is complete, run the checker from this
+directory:
+
+    python3 {root}/verify.py
+
+- exit 0 → verified. Done.
+- exit 1 → read the output: a `GNOSISLAB_VERDICT` line lists each
+  failure with a hint. Fix the real work and re-run.
+- exit ≥2 → the checker itself is broken — report that instead of
+  working blind.
+
+`./.gnosislab-check` (when present) runs the identical checker.
+The daemon re-runs the same check after your turn regardless —
+an unverified claim only costs another turn.
+"""
+
 
 VERIFY_PY = '''\
 #!/usr/bin/env python3
@@ -390,6 +416,8 @@ def init_workspace(target: str, *, force: bool = False) -> int:
         verify = root / "verify.py"
         verify.write_text(VERIFY_PY)
         verify.chmod(0o755)
+        (root / "work" / "AGENTS.md").write_text(
+            AGENTS_MD.format(root=root))
 
         (root / "README.md").write_text(README_MD.format(
             name=root.name, env_path=root / "env", root=root,
