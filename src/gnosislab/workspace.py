@@ -127,6 +127,10 @@ TASK_MD = """\
 Write hello.py in this directory that prints "hello from gnosislab",
 then run it and save its exact stdout to hello_out.txt in the same
 directory.
+
+Work autonomously: choose reasonable defaults, never pause to ask —
+there is no operator to answer. The task is done when the checker
+passes, not when you believe it is.
 """
 
 VERIFY_PY = '''\
@@ -307,6 +311,36 @@ def _drivers_dir() -> Path:
     return Path(drivers.__file__).parent
 
 
+# Sandbox opencode runs unattended (loops) and unsupervised (TUI): the
+# whole point of the workspace is that the folder is the blast radius.
+# Ask-permission inside one is a stall, not a safeguard — opencode
+# under a daemon's stdin=DEVNULL dies on the prompt's EOF, and a TUI
+# prompt is just friction for the same operation it will approve.
+OPENCODE_PERMISSIONS = {
+    "edit": "allow",
+    "bash": "allow",
+    "webfetch": "allow",
+    "doom_loop": "allow",
+    "external_directory": "allow",
+}
+
+
+def _write_opencode_defaults(root: Path) -> None:
+    """Merge sandbox defaults into the workspace's opencode.json —
+    `gnosislab setup opencode` later adds the `mcp` block alongside."""
+    cfg_path = (root / "home" / ".config" / "opencode"
+                / "opencode.json")
+    cfg = {}
+    if cfg_path.is_file():
+        try:
+            cfg = json.loads(cfg_path.read_text())
+        except ValueError:
+            pass
+    cfg.setdefault("permission", {}).update(OPENCODE_PERMISSIONS)
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps(cfg, indent=2) + "\n")
+
+
 def init_workspace(target: str, *, force: bool = False) -> int:
     root = Path(target).expanduser().resolve()
     if root.is_dir() and any(root.iterdir()) and not force:
@@ -349,6 +383,8 @@ def init_workspace(target: str, *, force: bool = False) -> int:
         (root / "env").write_text(ENV_FILE.format(
             env_path=root / "env", root=root, home=home,
             exports=exports))
+
+        _write_opencode_defaults(root)
 
         (root / "task.md").write_text(TASK_MD)
         verify = root / "verify.py"
@@ -458,6 +494,7 @@ def ws_up(target: str | None = None) -> int:
     else:
         print("daemon: already running")
 
+    _write_opencode_defaults(root)  # permissions — setup merges mcp in
     _setup(["opencode"])          # writes sandbox opencode.json
     rc = 0
     for name in COMPONENTS:
