@@ -31,7 +31,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-REGISTRY = Path.home() / ".config" / "gnosislab" / "workspaces.json"
+def _real_home() -> Path:
+    """The account's real home — immune to HOME redirects. Inside a
+    sourced workspace env, Path.home() follows HOME into the sandbox;
+    the port registry must always be the one global file."""
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError):
+        return Path.home()
+
+
+REGISTRY = _real_home() / ".config" / "gnosislab" / "workspaces.json"
 
 # 50-port spans at 28N00 — one per workspace. 280xx is the system
 # default sub-block (never handed out); start at 28100.
@@ -507,5 +518,20 @@ def ws_run(argv: list[str]) -> int:
         print("gnosislab run: no workspace found — run inside one",
               file=sys.stderr)
         return 2
+    argv = _sandbox_argv(argv)
     os.execvpe(argv[0], argv, _ws_env(root))
     return 127  # unreachable
+
+
+def _sandbox_argv(argv: list[str]) -> list[str]:
+    """opencode under a sandbox HOME needs --standalone: its managed
+    background service binds one global default port (49374), so a
+    sandbox TUI collides with the real service and hangs on
+    'Starting background server…'. Private server per invocation
+    sidesteps the managed service entirely — same fix as the driver."""
+    if (Path(argv[0]).name == "opencode"
+            and not any(a == "--standalone" or a == "--server"
+                        or a.startswith("--server=")
+                        for a in argv[1:])):
+        return [argv[0], "--standalone", *argv[1:]]
+    return argv

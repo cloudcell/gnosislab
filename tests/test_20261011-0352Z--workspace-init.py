@@ -119,3 +119,26 @@ def test_run_needs_workspace(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("GNOSISLAB_WORKSPACE", raising=False)
     assert ws.ws_run(["echo", "hi"]) == 2
     assert ws.ws_run([]) == 2
+
+
+def test_sandbox_argv_injects_standalone():
+    assert ws._sandbox_argv(["opencode"])[1] == "--standalone"
+    assert ws._sandbox_argv(
+        ["/home/x/.opencode/bin/opencode", "run"])[:2] == [
+        "/home/x/.opencode/bin/opencode", "--standalone"]
+    # explicit flags are respected — no double-injection
+    argv = ["opencode", "--standalone"]
+    assert ws._sandbox_argv(argv) == argv
+    assert ws._sandbox_argv(
+        ["opencode", "--server", "http://x:1"]) == [
+        "opencode", "--server", "http://x:1"]
+    # non-opencode commands pass through untouched
+    assert ws._sandbox_argv(["bash"]) == ["bash"]
+
+
+def test_registry_ignores_home_redirect(tmp_path, monkeypatch):
+    """`init` under a sourced workspace env must still register in the
+    REAL home — a HOME-scoped registry double-allocates port blocks."""
+    monkeypatch.setenv("HOME", str(tmp_path / "sandbox-home"))
+    assert ws._real_home() != Path(tmp_path / "sandbox-home")
+    assert str(ws.REGISTRY).startswith(str(ws._real_home()))
