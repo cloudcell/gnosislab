@@ -387,7 +387,8 @@ def req(port, method, path, token=None, body=None):
                     r, timeout=5) as resp:
             return resp.status, json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read() or b"{}")
+        with e:  # HTTPError holds a socket — close or 3.14 ResourceWarning
+            return e.code, json.loads(e.read() or b"{}")
 
 
 def test_api_requires_auth(api):

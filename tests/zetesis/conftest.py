@@ -199,35 +199,39 @@ def zetesis_http_server():
     log_path = f"/tmp/zetesis-test-{timestamp}.log"
     config_path = f"/tmp/zetesis-test-{timestamp}.toml"
 
-    evidence_port = find_free_port(29400)
-    claims_port = find_free_port(29500)
-    mcp_port = find_free_port(28070)
-    obs_port = find_free_port(28071)
-
     procs = []
     logs = []
-    try:
-        for role, port in (("evidence", evidence_port),
-                           ("claims", claims_port)):
-            lp = f"/tmp/zetesis-stub-{role}-{timestamp}.log"
-            lf = open(lp, "w")
-            logs.append((lf, lp))
-            p = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(REPO_ROOT / "tests" / "downstream_mcp_server.py"),
-                    "--role", role,
-                    "--transport", "http",
-                    "--port", str(port),
-                ],
-                stdout=lf, stderr=subprocess.STDOUT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
-                cwd=str(REPO_ROOT),
-            )
-            procs.append(p)
-            wait_for_port(port, timeout=20.0)
+    for attempt in range(2):
+        # bind-0 probing has an inherent probe→bind gap: another worker
+        # or an outbound connection can steal the port we just checked.
+        # Retry once with fresh ports before declaring a real failure.
+        evidence_port = find_free_port(29400)
+        claims_port = find_free_port(29500)
+        mcp_port = find_free_port(28070)
+        obs_port = find_free_port(28071)
+        procs, logs = [], []
+        try:
+            for role, port in (("evidence", evidence_port),
+                               ("claims", claims_port)):
+                lp = f"/tmp/zetesis-stub-{role}-{timestamp}.log"
+                lf = open(lp, "w")
+                logs.append((lf, lp))
+                p = subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "tests" / "downstream_mcp_server.py"),
+                        "--role", role,
+                        "--transport", "http",
+                        "--port", str(port),
+                    ],
+                    stdout=lf, stderr=subprocess.STDOUT,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                    cwd=str(REPO_ROOT),
+                )
+                procs.append(p)
+                wait_for_port(port, timeout=20.0)
 
-        Path(config_path).write_text(f'''
+            Path(config_path).write_text(f'''
 db_path = "{db_path}"
 
 [adaptors.evidence]
@@ -239,34 +243,43 @@ transport = "streamable-http"
 url = "http://127.0.0.1:{claims_port}/mcp"
 ''')
 
-        log_file = open(log_path, "w")
-        proc = subprocess.Popen(
-            [
-                sys.executable, "-m", "ml_zetesis_mcp",
-                "--transport", "http",
-                "--port", str(mcp_port),
-                "--stateless",
-                "--db-path", db_path,
-                "--config", config_path,
-                "--observability-port", str(obs_port),
-            ],
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            cwd=str(REPO_ROOT),
-        )
-        procs.append(proc)
-        logs.append((log_file, log_path))
+            log_file = open(log_path, "w")
+            proc = subprocess.Popen(
+                [
+                    sys.executable, "-m", "ml_zetesis_mcp",
+                    "--transport", "http",
+                    "--port", str(mcp_port),
+                    "--stateless",
+                    "--db-path", db_path,
+                    "--config", config_path,
+                    "--observability-port", str(obs_port),
+                ],
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                cwd=str(REPO_ROOT),
+            )
+            procs.append(proc)
+            logs.append((log_file, log_path))
 
-        wait_for_port(mcp_port, timeout=20.0)
-        wait_for_port(obs_port, timeout=10.0)
-    except TimeoutError:
-        for p in procs:
-            p.terminate()
-        for lf, lp in logs:
-            lf.close()
-            print(f"LOG {lp}:", Path(lp).read_text())
-        raise
+            wait_for_port(mcp_port, timeout=20.0)
+            wait_for_port(obs_port, timeout=10.0)
+            break
+        except TimeoutError:
+            for p in procs:
+                p.terminate()
+            for p in procs:
+                try:
+                    p.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    p.kill()
+                    p.wait()
+            for lf, lp in logs:
+                lf.close()
+                if attempt == 1:
+                    print(f"LOG {lp}:", Path(lp).read_text())
+            if attempt == 1:
+                raise
 
     yield (
         f"http://127.0.0.1:{mcp_port}",

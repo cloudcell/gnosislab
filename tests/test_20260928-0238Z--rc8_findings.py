@@ -164,7 +164,10 @@ class TestSubmitWindowCancel:
             await ex.await_async("trial-slow", timeout_seconds=0.05)
         )
         assert waited["status"] == "running"
-        await asyncio.sleep(0.6)
+        for _ in range(100):
+            if marker.exists():
+                break
+            await asyncio.sleep(0.1)
         assert marker.exists()
 
     async def test_await_async_returns_terminal_result(self, tmp_path):

@@ -72,10 +72,11 @@ def _api(state_dir: Path, method: str, path: str,
                                                       timeout=15) as r:
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read() or b"{}")
-        except json.JSONDecodeError:
-            return e.code, {"error": str(e)}
+        with e:  # error response still holds a socket — close it
+            try:
+                return e.code, json.loads(e.read() or b"{}")
+            except json.JSONDecodeError:
+                return e.code, {"error": str(e)}
     except OSError as e:
         raise RuntimeError(
             f"daemon unreachable at {state_dir} — {e}") from e
