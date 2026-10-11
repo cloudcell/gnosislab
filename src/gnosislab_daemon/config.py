@@ -160,6 +160,8 @@ def _parse_agents(raw: dict, path: Path) -> dict[str, AgentProfile]:
 
 
 def load_agents(path: Path = GLOBAL_CONFIG) -> dict[str, AgentProfile]:
+    path = path.resolve()   # config_dir must be absolute — a relative
+    # state-dir would produce driver argv that breaks under workdir cwd
     return _parse_agents(_load_toml(path).get("agents", {}), path)
 
 
@@ -169,6 +171,7 @@ def load(state_root: Path) -> DaemonConfig:
     ``[agents.*]`` in the state root's daemon.toml overrides/extends the
     user-global profiles — an experiment can carry its own agent
     definitions without touching shared config."""
+    state_root = Path(state_root).resolve()
     root_toml = _load_toml(state_root / "daemon.toml")
     raw = root_toml.get("daemon", {})
     limits = dict(DEFAULT_LIMITS)
