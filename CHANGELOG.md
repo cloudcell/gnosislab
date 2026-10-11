@@ -8,6 +8,16 @@ entry timestamps are commit times in **UTC**.
 
 ### Changed
 
+- **Default service block `38050–38091` → `28050–28091`** — the
+  five-server block moved below the Linux ephemeral source-port
+  range (32768–60999; `ip_local_port_range`). A fixed listener inside
+  that range can have its port transiently claimed as an outbound
+  connection's *source* port — `bind()` then fails while nothing
+  shows in `ss -tln` (observed: an IDE's outbound connection stole a
+  sandbox port twice). IDE client configs written against `380xx`
+  need `gnosislab setup <tool>` re-run (setup derives URLs from the
+  resolved env, never hardcodes). *(2026-10-11 01:14Z)*
+
 - **Lifecycle script renamed `labloop` → `gnosislab`** — the
   whole-stack lifecycle script (start|stop|restart|status|logs|
   export) is now `gnosislab`, matching the GnosisLab umbrella
@@ -36,6 +46,39 @@ entry timestamps are commit times in **UTC**.
   *(2026-09-29 18:58Z)*
 
 ### Added
+
+- **`gnosislab daemon` — per-state-root agent-loop supervisor**
+  (e-plan 20261010-2212Z; new `gnosislab_daemon` package in the
+  gnosislab wheel). A persistent control plane for independent
+  agent-driven work: one daemon per state root (kernel `flock`),
+  atomic `state.json`, append-only `events.jsonl` audit trail, and a
+  tick-driven state machine — agent exit → **independent checker's
+  exit code is the only verdict** → exit 1 resumes the agent's own
+  session (or restarts with context) carrying the checker's output;
+  exit 0 parks `verified`; exit ≥2 is `check_error`, never conflated
+  with agent failure. Agent profiles are argv templates with
+  `{prompt}`/`{session_id}` substitution (no shell evaluation;
+  verified `opencode` profile in `examples/daemon.toml`). Progress
+  bounds only: `max_turns`/`stagnation` — all time-based kills
+  (`agent_timeout`, `agent_idle_seconds`, `max_seconds`) default off
+  so legitimately long runs are never interrupted; `check_timeout`
+  bounds the checker alone. Children spawn `stdin=DEVNULL` —
+  interactive prompts get instant EOF instead of hanging forever.
+  `[daemon.env]` per-state-root environment applied before
+  `gnosislab.cli` imports: redirecting `HOME` + `ML_*` gives a fully
+  isolated stack (own `~/.ml-*`, own ports — values WIN over
+  inherited env, required for always-set vars like `HOME`). Recovery:
+  adopts live children by pid + `/proc` start-time (zombies
+  excluded), re-runs checks on orphans. Loopback-only Bearer-token
+  management API + browser console (cookie+CSRF, host/origin checks,
+  artifact path confinement, service-name whitelist); `gnosislab
+  daemon serve|start|list|status|pause|resume|stop|open|token|
+  shutdown`. Token discoverability: login page renders the token
+  file path + retrieval command, `daemon open` prints it, the serve
+  banner names it. Service restarts wait for MCP+GUI ports to
+  release before respawning. Suite: 24 tests incl. live sandbox
+  verification against a real opencode session.
+  *(2026-10-10 – 2026-10-11)*
 
 - **Evidence-policy regimes — preregistered evidence admission**
   the unconditional non-zero-variance gate on
@@ -183,6 +226,14 @@ entry timestamps are commit times in **UTC**.
   *(2026-09-29)*
 
 ### Fixed
+
+- **Daemon agent `PWD` inheritance** — `Popen(cwd=workdir)` left the
+  inherited `PWD` env var pointing at the daemon's own launch
+  directory; agents that resolve their project dir from `$PWD`
+  (opencode does) wrote work into the wrong tree — surfaced live as
+  an agent polluting the repo and the checker correctly refusing the
+  claim. `_spawn` now sets `PWD` to the loop's workdir.
+  *(2026-10-11 01:14Z)*
 
 - **RO-Crate export conformance** — a `ro-crate-validator` import of a
   full export surfaced four structural defects, all fixed: claim
