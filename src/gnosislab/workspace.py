@@ -159,6 +159,128 @@ an unverified claim only costs another turn.
 """
 
 
+RUBRIC_MD = """\
+# Judgment rubric — what counts as done for this task
+
+The verifier session checks *observable evidence*, not the agent's
+claims. One concrete criterion per line:
+
+- the deliverable in task.md actually exists and works (run it)
+- referenced files exist and contain what they claim
+- no placeholder/TODO content passed off as finished work
+"""
+
+VERIFY_LLM_PY = '''\
+#!/usr/bin/env python3
+"""LLM-judge checker — for tasks where 'done' needs judgment, not
+grep. Each check opens a FRESH opencode session as the verifier:
+it is given the task + rubric, then investigates the workdir with
+its own tools — reads files, runs code, tests claims. No shared
+session with the working agent, no curated excerpts: the verifier
+finds the evidence. Exit 0 verified, 1 continue, >=2 broken
+checker; prints GNOSISLAB_VERDICT last.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ws = Path(__file__).resolve().parent
+wd = Path.cwd()  # daemon spawns checkers in the workdir
+
+
+def _read(name, fallback):
+    p = ws / name
+    return p.read_text() if p.is_file() else fallback
+
+
+prompt = f"""You are an independent VERIFIER. A working agent was
+given a task in the directory you are running in; you decide whether
+the result actually satisfies it.
+
+TASK:
+{_read("task.md", "(no task.md)")}
+
+RUBRIC:
+{_read("RUBRIC.md", "Judge whether the task is done.")}
+
+Investigate this directory yourself — list it, read the files that
+matter, run the code if it claims to work. Trust what you observe,
+not what the work claims about itself.
+
+When you have judged, reply with ONLY a JSON object on one line:
+{{"pass": true|false,
+  "failures": [{{"name": str, "expected": str, "got": str,
+                 "hint": str}}]}}
+"""
+
+bin_ = os.environ.get("OPENCODE_BIN", "opencode")
+try:
+    r = subprocess.run(
+        [bin_, "run", "--standalone", "--auto", "--format", "json",
+         "-m", os.environ.get("OPENCODE_MODEL", "opencode/big-pickle"),
+         prompt],
+        cwd=wd, capture_output=True, text=True, timeout=600)
+except subprocess.TimeoutExpired:
+    print("verifier session timed out")
+    sys.exit(2)
+
+text = ""
+for line in r.stdout.splitlines():
+    try:
+        ev = json.loads(line)
+        if ev.get("type") == "text":
+            text += ev.get("part", {}).get("text", "")
+    except ValueError:
+        continue
+
+verdict = None
+for line in text.splitlines():
+    line = line.strip().strip("`")
+    if line.startswith("{") and '"pass"' in line:
+        try:
+            verdict = json.loads(line)
+        except ValueError:
+            continue
+if verdict is None:
+    print("verifier produced no parseable verdict")
+    print(r.stdout[-500:] if r.stdout else "")
+    sys.exit(2)
+
+verdict.setdefault("schema", 1)
+verdict.setdefault("failures", [])
+print("GNOSISLAB_VERDICT " + json.dumps(verdict))
+sys.exit(0 if verdict.get("pass") else 1)
+'''
+
+VERIFY_HUMAN_PY = '''\
+#!/usr/bin/env python3
+"""Human-gate checker — for tasks only a person can sign off on.
+Passes when workdir/APPROVED exists (touch it — contents don't
+matter). Exit 1 meanwhile: the daemon keeps the loop alive and
+re-checks each turn until you approve.
+"""
+import json
+import sys
+from pathlib import Path
+
+if (Path.cwd() / "APPROVED").is_file():
+    print("GNOSISLAB_VERDICT " + json.dumps(
+        {"schema": 1, "pass": True, "failures": [],
+         "note": "human approved"}))
+    sys.exit(0)
+
+print("GNOSISLAB_VERDICT " + json.dumps({
+    "schema": 1, "pass": False,
+    "failures": [{"name": "human_signoff",
+                  "expected": "APPROVED file in the workdir",
+                  "got": "missing",
+                  "hint": "review the work, then "
+                          "touch APPROVED in the workdir"}]}))
+sys.exit(1)
+'''
+
 VERIFY_PY = '''\
 #!/usr/bin/env python3
 """Loop checker — emits a GNOSISLAB_VERDICT structured diagnostic as
@@ -228,7 +350,9 @@ folder. Delete the folder and the whole stack is gone.
 | `.daemon/` | daemon state root — `daemon.toml`, loops/, console token |
 | `.daemon/drivers/` | session drivers this workspace owns |
 | `env` | `source env` → this shell runs inside the sandbox |
-| `task.md` / `verify.py` | starter task + verdict checker |
+| `task.md` / `verify.py` | starter task + deterministic checker |
+| `RUBRIC.md` / `verify_llm.py` | judged tasks: fresh verifier session each check |
+| `verify_human.py` | sign-off tasks: passes when `work/APPROVED` appears |
 
 ## Run it
 
@@ -246,6 +370,20 @@ gnosislab down                              # tear it all down
 
 (`source {env_path}` still works if you want a shell fully inside
 the sandbox — `up`/`down`/`run` never need it.)
+
+## Picking a checker
+
+`--check` takes any argv that exits 0/1 — what computes the verdict
+is yours. Three starters:
+
+- `verify.py` — deterministic: files, scripts, exact output. Use
+  whenever 'done' is measurable.
+- `verify_llm.py` — judgment: put criteria in `RUBRIC.md`, then
+  `--check python3 verify_llm.py` opens a *fresh verifier session*
+  per check — it investigates the workdir with its own tools, runs
+  your code, and reports a verdict. Not the working agent's word.
+- `verify_human.py` — sign-off: `--check python3 verify_human.py`
+  loops until you `touch work/APPROVED`.
 
 Console: http://127.0.0.1:{console_port}/ — token in
 `.daemon/management-token`.
@@ -418,6 +556,12 @@ def init_workspace(target: str, *, force: bool = False) -> int:
         verify.chmod(0o755)
         (root / "work" / "AGENTS.md").write_text(
             AGENTS_MD.format(root=root))
+        (root / "RUBRIC.md").write_text(RUBRIC_MD)
+        for name, src in (("verify_llm.py", VERIFY_LLM_PY),
+                          ("verify_human.py", VERIFY_HUMAN_PY)):
+            p = root / name
+            p.write_text(src)
+            p.chmod(0o755)
 
         (root / "README.md").write_text(README_MD.format(
             name=root.name, env_path=root / "env", root=root,
