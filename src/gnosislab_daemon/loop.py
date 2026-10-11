@@ -131,7 +131,11 @@ class LoopRunner:
             # never a silent block; EOF never grants a permission
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             start_new_session=True,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            # PWD is inherited stale (the daemon's own cwd); agents that
+            # resolve their project dir from $PWD — opencode does — would
+            # write into the repo instead of the loop's workdir.
+            env={**os.environ, "PYTHONUNBUFFERED": "1",
+                 "PWD": str(self.workdir)},
         )
         os.set_blocking(proc.stdout.fileno(), False)
         return proc
