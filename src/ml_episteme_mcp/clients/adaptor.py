@@ -187,7 +187,7 @@ class MCPAdaptor:
             url: http://localhost:8888/mcp
           claims:
             transport: streamable-http
-            url: http://localhost:38090/mcp
+            url: http://localhost:28090/mcp
     """
 
     def __init__(self, config: dict[str, dict[str, Any]]):

@@ -6,9 +6,9 @@ Run via stdio (for local MCP clients):
 
 Or via Streamable HTTP (for remote/hosted):
 
-    uv run ml-arete-mcp --transport http --port 38060
+    uv run ml-arete-mcp --transport http --port 28060
 
-Own port (38060), own store (~/.ml-arete/improver.db). ADR-0001: one
+Own port (28060), own store (~/.ml-arete/improver.db). ADR-0001: one
 MCP server per loop. Upstream adaptors ([adaptors.loop0],
 [adaptors.loop1], [adaptors.claims] in ml-arete.toml) connect on the
 server event loop — a failed connect disables that channel; the
@@ -70,7 +70,7 @@ def main() -> None:
         "--port",
         type=int,
         default=None,
-        help="Port for HTTP transport (default: config or 38060)",
+        help="Port for HTTP transport (default: config or 28060)",
     )
     parser.add_argument(
         "--host",

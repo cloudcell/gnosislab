@@ -6,9 +6,9 @@ Run via stdio (for local MCP clients):
 
 Or via Streamable HTTP (for remote/hosted):
 
-    uv run ml-anamnesis-mcp --transport http --port 38090
+    uv run ml-anamnesis-mcp --transport http --port 28090
 
-Defaults differ from ml-episteme by design: own port (38090), own
+Defaults differ from ml-episteme by design: own port (28090), own
 store (~/.ml-anamnesis/memory.db). ADR-0002: semantic memory is a
 separate server, never a module of the loop.
 """
@@ -64,8 +64,8 @@ def main() -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=38090,
-        help="Port for HTTP transport (default: 38090)",
+        default=28090,
+        help="Port for HTTP transport (default: 28090)",
     )
     parser.add_argument(
         "--host",

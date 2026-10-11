@@ -532,7 +532,7 @@ def create_mcp_adaptor(config: dict[str, Any]) -> tuple[MCPOptimizerAdaptor, MCP
 
         [adaptors.claims]
         transport = "streamable-http"
-        url = "http://localhost:38090/mcp"
+        url = "http://localhost:28090/mcp"
 
     Returns (optimizer, executor, claims) adaptors. Call connect() on each
     before use, and disconnect() when done.

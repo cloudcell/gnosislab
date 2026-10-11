@@ -20,7 +20,7 @@
 
 [adaptors.claims]
 transport = "streamable-http"
-url = "http://localhost:38090/mcp"
+url = "http://localhost:28090/mcp"
 
 # Local-executor sandboxing (bubblewrap mount namespaces, Linux only).
 # auto    — full when bwrap is installed; if bwrap is MISSING the trial

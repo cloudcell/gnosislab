@@ -1,0 +1,163 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GnosisLab Daemon</title>
+<style>
+:root { color-scheme: dark; }
+body { font: 14px/1.45 system-ui, sans-serif; background: #0d1117;
+       color: #c9d1d9; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+h1 { font-size: 1.3rem; } h2 { font-size: 1rem; color: #8b949e;
+       margin-top: 2rem; border-bottom: 1px solid #21262d; padding-bottom: .3rem; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid #21262d; }
+th { color: #8b949e; font-weight: 600; font-size: .8rem; }
+code, .mono { font-family: ui-monospace, monospace; font-size: .85em; }
+button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+         border-radius: 4px; padding: .2rem .55rem; cursor: pointer; font-size: .8rem; }
+button:hover { border-color: #58a6ff; }
+input, select { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+                border-radius: 4px; padding: .3rem .5rem; font: inherit; }
+.status-verified { color: #3fb950; } .status-running, .status-verifying { color: #58a6ff; }
+.status-blocked, .status-check_error { color: #f85149; }
+.status-paused, .status-created { color: #d29922; } .status-stopped { color: #8b949e; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: end; margin: .5rem 0; }
+.field { display: flex; flex-direction: column; gap: .2rem; }
+.field label { font-size: .72rem; color: #8b949e; }
+#err { color: #f85149; min-height: 1.2em; }
+.muted { color: #8b949e; }
+</style>
+
+<h1>GnosisLab Daemon <span id="gen" class="muted mono"></span></h1>
+<div id="err"></div>
+
+<h2>New Loop</h2>
+<div class="row">
+  <div class="field"><label>agent</label><select id="f-agent"></select></div>
+  <div class="field"><label>task file</label><input id="f-task" size="30" placeholder="/path/task.md"></div>
+  <div class="field"><label>workdir</label><input id="f-workdir" size="20" placeholder="."></div>
+  <div class="field"><label>checker argv (space-separated)</label><input id="f-check" size="24" placeholder="./verify.sh"></div>
+  <div class="field"><label>max turns</label><input id="f-turns" type="number" value="20" style="width:5rem"></div>
+  <div class="field"><label>watch</label><input id="f-watch" type="checkbox"></div>
+  <button id="b-create">create + start</button>
+</div>
+
+<h2>Loops</h2>
+<table><thead><tr>
+  <th>id</th><th>status</th><th>agent</th><th>attempts</th>
+  <th>last check</th><th>task</th><th></th>
+</tr></thead><tbody id="loops"></tbody></table>
+
+<h2>Services</h2>
+<table><thead><tr><th>name</th><th>state</th><th>mcp</th><th>gui</th><th></th></tr></thead>
+<tbody id="services"></tbody></table>
+
+<h2>Export</h2>
+<div class="row">
+  <button id="b-export">run full ro-crate export (zip)</button>
+  <span id="export-out" class="muted mono"></span>
+</div>
+<div id="jobs"></div>
+
+<script>
+let csrf = "";
+const $ = (id) => document.getElementById(id);
+const el = (tag, text) => { const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text; return e; };
+const err = (m) => { $("err").textContent = m || ""; };
+
+async function api(method, path, body) {
+  const opt = { method, headers: { "X-CSRF-Token": csrf } };
+  if (body !== undefined) {
+    opt.headers["Content-Type"] = "application/json";
+    opt.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opt);
+  if (r.status === 401) { location.reload(); return null; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { err(j.error || r.status); return null; }
+  err("");
+  return j;
+}
+
+async function refresh() {
+  const s = await api("GET", "/api/session");
+  if (s) csrf = s.csrf;
+  const h = await api("GET", "/api/health");
+  if (h) $("gen").textContent = " · gen " + h.gen + " · up " + h.uptime_s + "s";
+  const ag = await api("GET", "/api/agents");
+  if (ag && !$("f-agent").options.length) {
+    for (const a of ag.agents)
+      $("f-agent").appendChild(el("option", a)).value = a;
+  }
+  const data = await api("GET", "/api/loops");
+  const tb = $("loops"); tb.replaceChildren();
+  for (const l of (data && data.loops) || []) {
+    const tr = document.createElement("tr");
+    const st = el("td", l.status); st.className = "status-" + l.status;
+    tr.append(el("td"), st, el("td"), el("td"), el("td"), el("td"), el("td"));
+    tr.children[0].appendChild(el("code", l.id));
+    tr.children[2].textContent = l.agent;
+    tr.children[3].textContent = l.attempts;
+    tr.children[4].textContent = l.last_check && l.last_check.exit !== undefined
+      ? "exit " + l.last_check.exit : "—";
+    tr.children[5].appendChild(el("code", l.task_file));
+    for (const op of ["pause", "resume", "stop"]) {
+      const b = el("button", op);
+      b.onclick = async () => { await api("POST",
+        `/api/loops/${l.id}/${op}`, {}); refresh(); };
+      tr.children[6].appendChild(b);
+    }
+    tb.appendChild(tr);
+  }
+  const sv = await api("GET", "/api/services");
+  const sb = $("services"); sb.replaceChildren();
+  for (const s2 of (sv && sv.services) || []) {
+    const tr = document.createElement("tr");
+    const st2 = el("td", s2.up ? "up" : "down");
+    st2.className = s2.up ? "status-verified" : "status-stopped";
+    tr.append(el("td"), st2, el("td"), el("td"), el("td"));
+    tr.children[0].textContent = s2.name;
+    tr.children[2].appendChild(el("code", ":" + s2.mcp_port));
+    tr.children[3].appendChild(el("code", ":" + s2.gui_port));
+    for (const op of ["start", "stop", "restart"]) {
+      const b = el("button", op);
+      b.onclick = async () => { await api("POST",
+        `/api/services/${s2.name}/${op}`, {}); refresh(); };
+      tr.children[4].appendChild(b);
+    }
+    sb.appendChild(tr);
+  }
+}
+
+$("b-create").onclick = async () => {
+  const r = await api("POST", "/api/loops", {
+    agent: $("f-agent").value, task: $("f-task").value,
+    workdir: $("f-workdir").value || ".",
+    check: $("f-check").value.trim().split(/\s+/).filter(Boolean),
+    limits: { max_turns: +$("f-turns").value || 20 },
+    watch: $("f-watch").checked });
+  if (r) refresh();
+};
+
+$("b-export").onclick = async () => {
+  $("export-out").textContent = "running…";
+  const r = await api("POST", "/api/export",
+    { args: ["--full", "--format", "ro-crate", "--zip"] });
+  if (r) {
+    const poll = setInterval(async () => {
+      const j = await api("GET", "/api/export/jobs");
+      const job = j && j.jobs.find(x => x.id === r.job);
+      if (!job) return;
+      $("export-out").textContent = job.status;
+      if (job.status === "done") {
+        clearInterval(poll);
+        $("export-out").textContent = "rc=" + job.rc;
+        const d = el("div"); d.appendChild(el("code", job.output));
+        $("jobs").replaceChildren(d);
+      }
+    }, 1500);
+  }
+};
+
+refresh();
+setInterval(refresh, 4000);
+</script>

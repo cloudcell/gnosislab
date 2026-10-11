@@ -55,6 +55,7 @@ ml-agora-mcp = "ml_agora_mcp.__main__:main"
 packages = [
     "gnosislab_export",
     "src/gnosislab",
+    "src/gnosislab_daemon",
     "src/ml_episteme_mcp",
     "src/ml_anamnesis_mcp",
     "src/ml_zetesis_mcp",

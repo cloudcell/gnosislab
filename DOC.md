@@ -82,15 +82,15 @@ scientist is asked to remember:
 
 | Server | Port | GUI | Role |
 |---|---|---|---|
-| `ml-agora-mcp` | 38050 | 38051 | Lab status hub — read-only aggregation of all four channels (`lab://status`, `lab://topology`) |
-| `ml-arete-mcp` | 38060 | 38061 | Loop 2 — the recursive loop: tournaments between improvers, meta-decisions about the protocol itself |
-| `ml-zetesis-mcp` | 38070 | 38071 | Loop 1 — the search loop: open investigations, pull evidence, record findings |
-| `ml-episteme-mcp` | 38080 | 38081 | Loop 0 — the experiment loop: programmes, hypotheses, sandboxed trial execution, belief updates |
-| `ml-anamnesis-mcp` | 38090 | 38091 | Semantic memory — the claims store; claims are minted automatically when a hypothesis concludes |
+| `ml-agora-mcp` | 28050 | 28051 | Lab status hub — read-only aggregation of all four channels (`lab://status`, `lab://topology`) |
+| `ml-arete-mcp` | 28060 | 28061 | Loop 2 — the recursive loop: tournaments between improvers, meta-decisions about the protocol itself |
+| `ml-zetesis-mcp` | 28070 | 28071 | Loop 1 — the search loop: open investigations, pull evidence, record findings |
+| `ml-episteme-mcp` | 28080 | 28081 | Loop 0 — the experiment loop: programmes, hypotheses, sandboxed trial execution, belief updates |
+| `ml-anamnesis-mcp` | 28090 | 28091 | Semantic memory — the claims store; claims are minted automatically when a hypothesis concludes |
 
 All ports live in `ports.env` — edit that file to move them, never
 the scripts. Episteme also has an optional artifact-ingest listener
-(38082) that is enabled iff `ML_EPISTEME_INGEST_TOKEN` is set in
+(28082) that is enabled iff `ML_EPISTEME_INGEST_TOKEN` is set in
 `ingest.env`; without a token the surface is absent (fail closed).
 
 ## Install and run

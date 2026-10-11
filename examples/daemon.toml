@@ -1,0 +1,75 @@
+# gnosislab daemon — example configuration.
+#
+# Agent profiles are user-global: copy the [agents.*] tables you need into
+#   ~/.config/gnosislab/daemon.toml
+# Per-instance settings (listen/port/limits, optional per-experiment
+# agent overrides) live in the state root:
+#   <state-root>/daemon.toml
+#
+# Command templates are argv lists — {prompt} and {session_id}
+# substitute as single arguments. No shell is ever invoked; strings in
+# task files and checker args are always data.
+
+# --- agent profiles (global: ~/.config/gnosislab/daemon.toml) -----------
+
+# Example only — verify flags/session output for YOUR installed version
+# before trusting a profile.
+[agents.opencode]
+start = ["opencode", "run", "--format", "json", "{prompt}"]
+resume = ["opencode", "run", "--session", "{session_id}", "--format", "json", "{prompt}"]
+# Captures the session id from the agent's structured output so `resume`
+# can continue the same conversation instead of restarting blind.
+session_id_regex = '"sessionID"\s*:\s*"([^"]+)"'
+
+# An agent with no session-resume support: omit `resume`. The daemon
+# starts a fresh invocation each turn carrying the checker's output and
+# saved context, and the task still converges under verification.
+[agents.custom]
+start = ["my-agent", "--prompt", "{prompt}"]
+
+# --- per-instance daemon settings (<state-root>/daemon.toml) -------------
+
+[daemon]
+listen = "127.0.0.1"        # loopback only — anything else refuses to bind
+port = 38100                # pick a unique port per state root
+max_concurrent = 1          # agent invocations at once, per daemon
+
+# [daemon.env] — variables applied to this daemon's os.environ at serve;
+# the state root owns its environment so these WIN over inherited vars
+# (required — an always-set variable like HOME could never redirect
+# otherwise). Redirect HOME + ML_*_PORT to make a fully
+# isolated test stack: service ops then resolve sandbox state under
+# <home>/.ml-* and sandbox ports, never the default system.
+#
+# [daemon.env]
+# HOME = "/path/to/sandbox/home"
+# ML_AGORA_PORT = "39050"
+# ML_AGORA_GUI_PORT = "39051"
+# ML_ARETE_PORT = "39060"
+# ML_ARETE_GUI_PORT = "39061"
+# ML_ZETESIS_PORT = "39070"
+# ML_ZETESIS_GUI_PORT = "39071"
+# ML_EPISTEME_PORT = "39080"
+# ML_EPISTEME_GUI_PORT = "39081"
+# ML_ANAMNESIS_PORT = "39090"
+# ML_ANAMNESIS_GUI_PORT = "39091"
+
+[daemon.limits]
+max_turns = 20              # agent invocations per loop → BLOCKED
+stagnation = 4              # identical checker outputs in a row → BLOCKED
+# --- time limits are OFF by default -------------------------------------
+# A 6-hour training run is working, not hung: wall-clock is not a
+# verdict. Bounds are progress-based (turns, stagnation). Enable these
+# only if you know your workload needs them:
+# max_seconds = 0           # cycle wall-clock ceiling → BLOCKED
+# agent_timeout = 0         # per-invocation ceiling → kill + run check
+# agent_idle_seconds = 0    # no output for N seconds → kill + run check
+check_timeout = 300         # checker ceiling → CHECK_ERROR
+feedback_bytes = 8192       # checker output carried into next prompt
+output_bytes = 65536        # retained agent output per turn
+
+# Per-experiment agent overrides may also appear here — they shadow the
+# global profiles for this state root only:
+#
+# [agents.experiment-local]
+# start = ["./experiment-agent.sh", "{prompt}"]

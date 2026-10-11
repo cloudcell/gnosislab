@@ -27,7 +27,7 @@
 # machinery lands.
 [adaptors.loop0]
 transport = "streamable-http"
-url = "http://localhost:38080/mcp"
+url = "http://localhost:28080/mcp"
 
 # Loop-1 evidence — the read-only channel into ml-zetesis.
 # pull_evidence(source="loop1") proxies whitelisted read tools only;
@@ -35,7 +35,7 @@ url = "http://localhost:38080/mcp"
 # at what quality) are Loop-2's declared input.
 [adaptors.loop1]
 transport = "streamable-http"
-url = "http://localhost:38070/mcp"
+url = "http://localhost:28070/mcp"
 
 # Loop-1 orchestration — the write-capable channel into ml-zetesis.
 # Same destination as loop1, different role: this channel carries the
@@ -46,7 +46,7 @@ url = "http://localhost:38070/mcp"
 # check_orchestration_tool_whitelisted; loop1 stays read-only.
 [adaptors.loop1_orchestration]
 transport = "streamable-http"
-url = "http://localhost:38070/mcp"
+url = "http://localhost:28070/mcp"
 
 # Claims memory — anamnesis. Reads via
 # pull_evidence(source="anamnesis"); writes happen only at
@@ -55,7 +55,7 @@ url = "http://localhost:38070/mcp"
 # entities the cited evidence consulted.
 [adaptors.claims]
 transport = "streamable-http"
-url = "http://localhost:38090/mcp"
+url = "http://localhost:28090/mcp"
 
 # Integrity layer — check_invariants tool + /health/deep route.
 # Every check run appends to <db_dir>/logs/check-<YYYY-MM-DD>.jsonl

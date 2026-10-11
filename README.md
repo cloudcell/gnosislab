@@ -105,7 +105,7 @@ gnosislab config
 gnosislab logs episteme
 
 # open the lab status dashboard in your browser (agora by default)
-gnosislab dashboard            # → ML_AGORA_GUI_URL (default http://localhost:38051)
+gnosislab dashboard            # → ML_AGORA_GUI_URL (default http://localhost:28051)
 gnosislab dashboard episteme   # any server's GUI works too
 
 # stop everything (consumers first)
@@ -244,11 +244,11 @@ flowchart TB
 
 | Service | GUI | MCP |
 | --- | ---: | ---: |
-| Agora | `38051` | `38050` |
-| Arete | `38061` | `38060` |
-| Zetesis | `38071` | `38070` |
-| Episteme | `38081` | `38080` |
-| Anamnesis | `38091` | `38090` |
+| Agora | `28051` | `28050` |
+| Arete | `28061` | `28060` |
+| Zetesis | `28071` | `28070` |
+| Episteme | `28081` | `28080` |
+| Anamnesis | `28091` | `28090` |
 
 Defaults can be overridden with:
 
@@ -322,6 +322,21 @@ gnosislab status
 gnosislab logs arete
 gnosislab stop all
 ```
+
+### Resident experiment supervisor: `gnosislab daemon`
+
+Each state root gets its own daemon — a persistent supervisor that drives existing CLI agents against an independent verifier, and exposes a local console plus the same service-lifecycle and export powers as this CLI:
+
+```bash
+# one daemon per experiment state root
+gnosislab daemon serve --state-dir ~/exp-a/.daemon --port 38100
+gnosislab daemon start --agent opencode --task task.md \
+    --check ./verify.sh --state-dir ~/exp-a/.daemon
+gnosislab daemon status --state-dir ~/exp-a/.daemon
+gnosislab daemon open   --state-dir ~/exp-a/.daemon   # local console
+```
+
+The daemon never trusts an agent's claim of completion: after every invocation it runs the checker (`exit 0` = verified, `1` = continue, other = check error) and resumes the agent's session — or restarts it with saved context — until verification passes or a limit parks the loop as `BLOCKED`. Agent profiles are argv templates in `~/.config/gnosislab/daemon.toml`; adding an agent is config, not code. See `examples/daemon.toml` and `gnosislab daemon --help`.
 
 ### Sealed experiment execution
 
@@ -487,11 +502,11 @@ After startup, each service exposes a local GUI.
 For example:
 
 ```text
-Agora      http://localhost:38051
-Arete      http://localhost:38061
-Zetesis    http://localhost:38071
-Episteme   http://localhost:38081
-Anamnesis  http://localhost:38091
+Agora      http://localhost:28051
+Arete      http://localhost:28061
+Zetesis    http://localhost:28071
+Episteme   http://localhost:28081
+Anamnesis  http://localhost:28091
 ```
 
 Use:

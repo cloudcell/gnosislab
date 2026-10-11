@@ -6,7 +6,7 @@ Run via stdio (for local use with Claude Desktop, Cursor, etc.):
 
 Or via Streamable HTTP (for remote/hosted):
 
-    uv run ml-episteme-mcp --transport http --port 38080
+    uv run ml-episteme-mcp --transport http --port 28080
 
 Configuration:
     - CLI flags (highest priority)
@@ -18,7 +18,7 @@ Config file format (TOML):
 
     db_path = "/path/to/state.db"
     transport = "stdio"
-    port = 38080
+    port = 28080
 
     [adaptors.optimizer]
     transport = "stdio"
@@ -30,7 +30,7 @@ Config file format (TOML):
 
     [adaptors.claims]
     transport = "streamable-http"
-    url = "http://localhost:38090/mcp"
+    url = "http://localhost:28090/mcp"
 """
 
 from __future__ import annotations
@@ -124,13 +124,13 @@ Examples:
   ml-episteme-mcp
 
   # HTTP (for remote clients)
-  ml-episteme-mcp --transport http --port 38080
+  ml-episteme-mcp --transport http --port 28080
 
   # Stateless HTTP (survives server restarts)
-  ml-episteme-mcp --transport http --port 38080 --stateless
+  ml-episteme-mcp --transport http --port 28080 --stateless
 
   # With observability web GUI
-  ml-episteme-mcp --transport http --port 38080 --stateless --observability-port 38081
+  ml-episteme-mcp --transport http --port 28080 --stateless --observability-port 28081
 
   # Custom database
   ml-episteme-mcp --db-path /path/to/state.db
@@ -149,7 +149,7 @@ Examples:
         "--port",
         type=int,
         default=None,
-        help="Port for HTTP transport (default: 38080, or from config)",
+        help="Port for HTTP transport (default: 28080, or from config)",
     )
     parser.add_argument(
         "--host",

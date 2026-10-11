@@ -89,7 +89,7 @@ def find_free_port(start: int = 18080) -> int:
     call-site compatibility and ignored.
 
     The kernel ephemeral range (32768-60999) overlaps the production
-    band 38050-38091 (five servers x MCP+GUI, see ports.env) — never
+    band 28050-28091 (five servers x MCP+GUI, see ports.env) — never
     hand one of those to a test: it could collide with a live server,
     or let a test client reach the production store.
     """
@@ -97,9 +97,9 @@ def find_free_port(start: int = 18080) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
-        if not 38050 <= port <= 38091:
+        if not 28050 <= port <= 28091:
             return port
-    raise RuntimeError("no free port outside the production band 38050-38091")
+    raise RuntimeError("no free port outside the production band 28050-28091")
 
 
 def wait_for_port(port: int, timeout: float = 15.0) -> None:

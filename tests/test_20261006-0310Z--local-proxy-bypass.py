@@ -44,9 +44,9 @@ ALL_HELPERS = pytest.mark.parametrize(
 )
 
 LOCAL_URLS = [
-    "http://localhost:38090/mcp",
-    "http://127.0.0.1:38090/mcp",
-    "http://[::1]:38090/mcp",
+    "http://localhost:28090/mcp",
+    "http://127.0.0.1:28090/mcp",
+    "http://[::1]:28090/mcp",
     "https://localhost/mcp",
 ]
 
@@ -168,10 +168,10 @@ def test_port_pid_windows_netstat_parse(monkeypatch):
 
     netstat_out = """\
   Proto  Local Address          Foreign Address        State           PID
-  TCP    0.0.0.0:38080          0.0.0.0:0              LISTENING       8473
+  TCP    0.0.0.0:28080          0.0.0.0:0              LISTENING       8473
   TCP    127.0.0.1:3808         0.0.0.0:0              LISTENING       9999
-  TCP    127.0.0.1:38090        0.0.0.0:0              TIME_WAIT       42
-  TCP    [::1]:38090            [::]:0                 LISTENING       555
+  TCP    127.0.0.1:28090        0.0.0.0:0              TIME_WAIT       42
+  TCP    [::1]:28090            [::]:0                 LISTENING       555
 """
     monkeypatch.setattr(cli.os, "name", "nt")
     monkeypatch.setattr(
@@ -179,7 +179,7 @@ def test_port_pid_windows_netstat_parse(monkeypatch):
         lambda *a, **k: types.SimpleNamespace(stdout=netstat_out),
     )
 
-    assert cli._port_pid(38080) == 8473
+    assert cli._port_pid(28080) == 8473
     assert cli._port_pid(3808) == 9999      # exact port, not prefix
-    assert cli._port_pid(38090) == 555      # LISTENING only, not TIME_WAIT
+    assert cli._port_pid(28090) == 555      # LISTENING only, not TIME_WAIT
     assert cli._port_pid(1) is None

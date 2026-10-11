@@ -18,22 +18,22 @@ call_timeout_seconds = 30
 # Semantic memory — the claims endpoint (ml-anamnesis-mcp)
 [adaptors.claims]
 transport = "streamable-http"
-url = "http://localhost:38090/mcp"
+url = "http://localhost:28090/mcp"
 
 # Loop 0 — the experiment loop (ml-episteme-mcp)
 [adaptors.loop0]
 transport = "streamable-http"
-url = "http://localhost:38080/mcp"
+url = "http://localhost:28080/mcp"
 
 # Loop 1 — the search loop (ml-zetesis-mcp)
 [adaptors.loop1]
 transport = "streamable-http"
-url = "http://localhost:38070/mcp"
+url = "http://localhost:28070/mcp"
 
 # Loop 2 — the recursive loop (ml-arete-mcp)
 [adaptors.loop2]
 transport = "streamable-http"
-url = "http://localhost:38060/mcp"
+url = "http://localhost:28060/mcp"
 
 # Integrity layer — check_invariants tool + /health/deep route.
 # Every run appends to <db_dir>/logs/check-<YYYY-MM-DD>.jsonl —

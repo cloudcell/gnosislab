@@ -106,8 +106,8 @@ async def test_tournament_page_links_entities(improver_store):
     )
 
     _seed_tournament_with_campaign(improver_store)
-    loop0_gui = "http://epi.example:38081"
-    loop1_gui = "http://zet.example:38071"
+    loop0_gui = "http://epi.example:28081"
+    loop1_gui = "http://zet.example:28071"
     app = create_observability_app(
         improver_store,
         upstream_gui_bases={

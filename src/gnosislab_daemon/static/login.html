@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GnosisLab Daemon — sign in</title>
+<style>
+body { font: 14px system-ui, sans-serif; background: #0d1117; color: #c9d1d9;
+       display: grid; place-items: center; min-height: 90vh; margin: 0; }
+form { display: flex; flex-direction: column; gap: .7rem; width: 300px; }
+input, button { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+                border-radius: 4px; padding: .5rem; font: inherit; }
+button { background: #21262d; cursor: pointer; }
+#err { color: #f85149; font-size: .85rem; min-height: 1em; }
+</style>
+<form id="f">
+  <h1 style="font-size:1.1rem">GnosisLab Daemon</h1>
+  <input id="t" type="password" placeholder="management token" autofocus>
+  <button type="submit">sign in</button>
+  <div id="err"></div>
+  <p style="color:#8b949e;font-size:.8rem;line-height:1.5">
+    the token lives at<br>
+    <code>__TOKEN_PATH__</code><br>
+    or run<br>
+    <code>gnosislab daemon token --state-dir __STATE_DIR__</code>
+  </p>
+</form>
+<script>
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/login", { method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ token: document.getElementById("t").value }) });
+  if (r.ok) location.reload();
+  else document.getElementById("err").textContent = "invalid token";
+};
+</script>

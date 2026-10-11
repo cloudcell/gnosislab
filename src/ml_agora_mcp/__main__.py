@@ -6,9 +6,9 @@ Run via stdio (for local MCP clients):
 
 Or via Streamable HTTP (for remote/hosted):
 
-    uv run ml-agora-mcp --transport http --port 38050
+    uv run ml-agora-mcp --transport http --port 28050
 
-Own port (38050 — the lowest block: the front porch), own dir
+Own port (28050 — the lowest block: the front porch), own dir
 (~/.ml-agora/ — logs only; the product is state-free). Channels
 ([adaptors.claims|loop0|loop1|loop2] in ml-agora.toml) connect on the
 server event loop — a failed connect stays registered and the
@@ -68,7 +68,7 @@ def main() -> None:
         "--port",
         type=int,
         default=None,
-        help="Port for HTTP transport (default: config or 38050)",
+        help="Port for HTTP transport (default: config or 28050)",
     )
     parser.add_argument(
         "--host",

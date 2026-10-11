@@ -24,7 +24,7 @@
 # pull_evidence(source="loop0") proxies whitelisted read tools only.
 [adaptors.evidence]
 transport = "streamable-http"
-url = "http://localhost:38080/mcp"
+url = "http://localhost:28080/mcp"
 
 # Loop-0 promotion — the write channel into ml-episteme's insert-only
 # lineage surfaces (register_candidate, create_evaluation_contract,
@@ -32,7 +32,7 @@ url = "http://localhost:38080/mcp"
 # path can never grow a write. Same endpoint, different whitelist.
 [adaptors.promotion]
 transport = "streamable-http"
-url = "http://localhost:38080/mcp"
+url = "http://localhost:28080/mcp"
 
 # Claims memory — anamnesis. Reads via pull_evidence(source="anamnesis");
 # writes happen only at conclude_investigation, which mints each live
@@ -40,7 +40,7 @@ url = "http://localhost:38080/mcp"
 # Loop-0 entities consulted.
 [adaptors.claims]
 transport = "streamable-http"
-url = "http://localhost:38090/mcp"
+url = "http://localhost:28090/mcp"
 
 # Integrity layer — check_invariants tool + /health/deep route.
 # Every check run appends to <db_dir>/logs/check-<YYYY-MM-DD>.jsonl

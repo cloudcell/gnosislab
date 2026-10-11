@@ -6,9 +6,9 @@ Run via stdio (for local MCP clients):
 
 Or via Streamable HTTP (for remote/hosted):
 
-    uv run ml-zetesis-mcp --transport http --port 38070
+    uv run ml-zetesis-mcp --transport http --port 28070
 
-Own port (38070), own store (~/.ml-zetesis/search.db). ADR-0001: one
+Own port (28070), own store (~/.ml-zetesis/search.db). ADR-0001: one
 MCP server per loop. Upstream adaptors ([adaptors.evidence],
 [adaptors.claims] in ml-zetesis.toml) connect on the server event loop —
 a failed connect disables that channel; the server still runs.
@@ -69,7 +69,7 @@ def main() -> None:
         "--port",
         type=int,
         default=None,
-        help="Port for HTTP transport (default: config or 38070)",
+        help="Port for HTTP transport (default: config or 28070)",
     )
     parser.add_argument(
         "--host",

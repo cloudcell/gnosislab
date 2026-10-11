@@ -27,7 +27,7 @@ except ModuleNotFoundError:  # Python < 3.11
 DEFAULTS: dict[str, Any] = {
     "db_path": str(Path.home() / ".ml-arete" / "improver.db"),
     "transport": "stdio",
-    "port": 38060,
+    "port": 28060,
     "host": "127.0.0.1",
     # Recurrent protocol ships enabled (plan-20260926-0438Z).
     "enforcement": {
@@ -98,19 +98,19 @@ def create_adaptors_from_config(config: dict[str, Any]):
 
         [adaptors.loop0]
         transport = "streamable-http"
-        url = "http://localhost:38080/mcp"        # ml-episteme (Loop 0)
+        url = "http://localhost:28080/mcp"        # ml-episteme (Loop 0)
 
         [adaptors.loop1]
         transport = "streamable-http"
-        url = "http://localhost:38070/mcp"       # ml-zetesis (Loop 1)
+        url = "http://localhost:28070/mcp"       # ml-zetesis (Loop 1)
 
         [adaptors.loop1_orchestration]
         transport = "streamable-http"
-        url = "http://localhost:38070/mcp"       # ml-zetesis — write channel
+        url = "http://localhost:28070/mcp"       # ml-zetesis — write channel
 
         [adaptors.claims]
         transport = "streamable-http"
-        url = "http://localhost:38090/mcp"       # anamnesis
+        url = "http://localhost:28090/mcp"       # anamnesis
 
     Shared knobs under [adaptors]: `call_timeout_seconds` bounds one
     upstream call (per-channel override allowed); `reconnect_seconds`

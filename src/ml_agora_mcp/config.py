@@ -28,7 +28,7 @@ except ModuleNotFoundError:  # Python < 3.11
 DEFAULTS: dict[str, Any] = {
     "db_dir": str(Path.home() / ".ml-agora"),
     "transport": "stdio",
-    "port": 38050,
+    "port": 28050,
     "host": "127.0.0.1",
 }
 
@@ -82,19 +82,19 @@ def create_adaptors_from_config(config: dict[str, Any]):
 
         [adaptors.claims]
         transport = "streamable-http"
-        url = "http://localhost:38090/mcp"      # anamnesis
+        url = "http://localhost:28090/mcp"      # anamnesis
 
         [adaptors.loop0]
         transport = "streamable-http"
-        url = "http://localhost:38080/mcp"      # ml-episteme
+        url = "http://localhost:28080/mcp"      # ml-episteme
 
         [adaptors.loop1]
         transport = "streamable-http"
-        url = "http://localhost:38070/mcp"      # ml-zetesis
+        url = "http://localhost:28070/mcp"      # ml-zetesis
 
         [adaptors.loop2]
         transport = "streamable-http"
-        url = "http://localhost:38060/mcp"      # ml-arete
+        url = "http://localhost:28060/mcp"      # ml-arete
 
     Shared knobs under [adaptors]: `call_timeout_seconds` bounds one
     upstream read (per-channel override allowed); `reconnect_seconds`

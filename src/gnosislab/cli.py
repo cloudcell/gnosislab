@@ -36,11 +36,11 @@ from pathlib import Path
 COMPONENTS = ["anamnesis", "episteme", "zetesis", "arete", "agora"]
 
 DEFAULT_PORTS = {
-    "agora": 38050,
-    "arete": 38060,
-    "zetesis": 38070,
-    "episteme": 38080,
-    "anamnesis": 38090,
+    "agora": 28050,
+    "arete": 28060,
+    "zetesis": 28070,
+    "episteme": 28080,
+    "anamnesis": 28090,
 }
 
 USER_CONFIG = Path.home() / ".config" / "gnosislab" / "ports.env"
@@ -836,6 +836,9 @@ USAGE = """gnosislab — lifecycle for the ml-* loop stack.
                                  export.jsonld)
   gnosislab export  --full --format ro-crate|prov|jsonld [--zip]
                                  export the whole store's provenance
+  gnosislab daemon  <cmd>        resident per-state-root supervisor
+                                 (agent loops + service control + export)
+                                 — 'gnosislab daemon --help' for commands
 
 names: anamnesis  episteme  zetesis  arete  agora
 
@@ -900,6 +903,9 @@ def main() -> None:
         sys.exit(_setup(sys.argv[2:]))
     if cmd == "export":
         sys.exit(_export(sys.argv[2:]))
+    if cmd == "daemon":
+        from gnosislab_daemon.commands import main as daemon_main
+        sys.exit(daemon_main(sys.argv[2:]))
 
     print(USAGE)
     sys.exit(2 if cmd else 0)

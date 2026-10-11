@@ -36,7 +36,7 @@ except ModuleNotFoundError:  # Python < 3.11
 DEFAULTS: dict[str, Any] = {
     "db_path": str(Path.home() / ".ml-episteme" / "state.db"),
     "transport": "stdio",
-    "port": 38080,
+    "port": 28080,
     "host": "127.0.0.1",
     # Recurrent protocol ships enabled (plan-20260926-0438Z):
     # mutating tools require a status digest read within the TTL;
@@ -152,7 +152,7 @@ def create_adaptor_from_config(config: dict[str, Any]) -> MCPAdaptor:
 
         [adaptors.claims]
         transport = "streamable-http"
-        url = "http://localhost:38090/mcp"
+        url = "http://localhost:28090/mcp"
     """
     adaptor_configs = config.get("adaptors", {})
     data_dir = config.get("data_dir")
