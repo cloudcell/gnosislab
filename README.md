@@ -16,9 +16,13 @@
 [![piwheel downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcloudcell%2Fgnosislab%2Fmaster%2Fstats%2Fpiwheels.json&query=%24.downloads&label=piwheels%20downloads&color=blue)](https://www.piwheels.org/project/gnosislab/)
 [![PyPI downloads](https://pypistats.com/api/badges/gnosislab?period=total)](https://pypistats.com/packages/gnosislab)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/gnosislab?period=total&units=NONE&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/gnosislab)
+[![GnosisLab-VM](https://img.shields.io/badge/GnosisLab--VM-isolated%20VM%20edition-6f42c1?logo=linux&logoColor=white)](https://github.com/cloudcell/gnosislab-vm)
 [![Discord](https://img.shields.io/discord/903850592957517835?logo=discord&label=Discord)](https://discord.com/invite/v9JVtpVuUT)
 
+**VM edition available:** [GnosisLab-VM](https://github.com/cloudcell/gnosislab-vm) provides an optional isolated KVM/libvirt environment for GnosisLab research workflows.
+
 [Install](#quick-start) · [Documentation](https://loop.cloudcell.workers.dev/docs) · [How it works](#how-it-works) · [Architecture](#architecture) · [For researchers](#for-researchers) · [For developers](#for-developers) · [Paper](https://doi.org/10.2139/ssrn.7573878) · [Discord](https://discord.gg/v9JVtpVuUT)
+
 
 </div>
 
