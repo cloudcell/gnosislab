@@ -7,7 +7,7 @@
 
 **Turn hypotheses into experiments, experiments into evidence, and evidence into auditable conclusions.**
 
-[![DOI](https://zenodo.org/badge/1401154499.svg)](https://doi.org/10.5281/zenodo.23128199)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23128199-blue)](https://doi.org/10.5281/zenodo.23128199)
 [![SSRN](https://img.shields.io/badge/SSRN-preprint-blue)](https://doi.org/10.2139/ssrn.7573878)
 [![CI](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudcell/gnosislab/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/gnosislab?label=PyPI&cacheSeconds=3600)](https://pypi.org/project/gnosislab/)
