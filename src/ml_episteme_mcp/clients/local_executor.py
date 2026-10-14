@@ -194,6 +194,19 @@ class LocalExecutor(ExecutorRole):
             self._sandbox = sandbox
         else:
             self._sandbox = "missing"
+        # Explicit VM-only boundary. Standalone GnosisLab keeps the existing
+        # executor semantics unless its operator opts into this policy.
+        # Unknown values fail closed instead of becoming an implicit opt-out.
+        vm_isolation = os.environ.get("ML_EPISTEME_TRIAL_ISOLATION", "off")
+        if vm_isolation not in ("off", "enforced"):
+            raise ValueError("ML_EPISTEME_TRIAL_ISOLATION must be off or enforced")
+        self._vm_isolation = vm_isolation == "enforced"
+        self._vm_state_root = Path("/state")
+        if self._vm_isolation and self._sandbox != "full":
+            raise RuntimeError(
+                "VM trial isolation requires sandbox=full and installed "
+                "bubblewrap; refusing an unisolated Episteme executor"
+            )
         self._sealed_patterns = [str(p) for p in (sealed_path_patterns or [])]
         # Unknown values fail closed to "deny" — an unrecognized mode
         # must not silently become trace-only.
@@ -392,7 +405,22 @@ class LocalExecutor(ExecutorRole):
                         ("TRITON_CACHE_DIR", "tmp/triton", Path.home() / ".triton" / "cache"),
                     ):
                         host_dir = Path(env[var]) if env.get(var) else host_default
-                        if host_dir.is_dir():
+                        # In the VM isolation mode, cache directories must
+                        # not accidentally re-expose trusted /state through
+                        # their writable bind mounts. Use trial-local caches
+                        # for anything within that protected tree.
+                        protected_cache = (
+                            self._vm_isolation
+                            and (
+                                host_dir.resolve().is_relative_to(
+                                    self._vm_state_root.resolve()
+                                )
+                                or self._vm_state_root.resolve().is_relative_to(
+                                    host_dir.resolve()
+                                )
+                            )
+                        )
+                        if host_dir.is_dir() and not protected_cache:
                             shared_rw.append(str(host_dir))
                         else:
                             p = artifact_dir / sub
@@ -404,7 +432,10 @@ class LocalExecutor(ExecutorRole):
                     # there is no env var to redirect, and silently
                     # creating host dirs is not this layer's business.
                     for p in self._shared_caches:
-                        if Path(p).is_dir():
+                        if Path(p).is_dir() and not (
+                            self._vm_isolation
+                            and self._overlaps_vm_state(p)
+                        ):
                             shared_rw.append(p)
                     shared_cache_report = {
                         "bound": shared_rw,
@@ -723,6 +754,12 @@ class LocalExecutor(ExecutorRole):
             if artifact_dir is None:
                 script_path.unlink(missing_ok=True)
 
+    def _overlaps_vm_state(self, path: str | Path) -> bool:
+        """Whether a candidate mount aliases or contains protected state."""
+        p = Path(path).resolve()
+        root = self._vm_state_root.resolve()
+        return p.is_relative_to(root) or root.is_relative_to(p)
+
     def _sandbox_argv(
         self,
         argv: list[str],
@@ -745,6 +782,40 @@ class LocalExecutor(ExecutorRole):
         if self._sandbox == "none" or not self._has_bwrap:
             return argv
         args = ["bwrap", "--die-with-parent"]
+        if self._vm_isolation:
+            # Separate the trial's network, PID and IPC namespaces from
+            # the trusted MCP processes. Default-deny networking prevents
+            # access to localhost MCP endpoints and the ingest channel.
+            # Drop all child capabilities: the server needs SYS_ADMIN to
+            # set up bwrap, but trial code never does.
+            args += [
+                "--unshare-net", "--unshare-pid", "--unshare-ipc",
+                "--cap-drop", "ALL",
+            ]
+            root = self._vm_state_root.resolve()
+            if not root.is_dir():
+                raise ValueError(f"protected state root missing: {root}")
+            trial_root = artifact_dir.resolve() if artifact_dir else None
+            # The trial may only bind its own artifact directory out of
+            # /state. All other /state paths (including symlink aliases
+            # and ancestor mounts) are forbidden inputs.
+            for p in [*(extra_ro_paths or []), *(extra_rw_paths or []),
+                      *(target for _, target in (overlay_ro or []))]:
+                if self._overlaps_vm_state(p) and not (
+                    trial_root is not None
+                    and Path(p).resolve().is_relative_to(trial_root)
+                ):
+                    raise ValueError(
+                        f"trial mount overlaps protected trusted state: {p}"
+                    )
+            if script_path.resolve().is_relative_to(root) and not (
+                trial_root is not None
+                and script_path.resolve().is_relative_to(trial_root)
+            ):
+                raise ValueError(
+                    "trial wrapper is inside protected state but outside "
+                    "its own artifact directory"
+                )
         if self._sandbox == "minimal":
             args += ["--dev-bind", "/", "/"]
         else:  # full — read-only root, artifact dir is the only rw mount
@@ -754,6 +825,18 @@ class LocalExecutor(ExecutorRole):
                 "--proc", "/proc",
             ]
         args += ["--tmpfs", "/tmp"]
+        if self._vm_isolation:
+            # Hide every other research DB, token, log and trial artifact
+            # before constructing trial-specific mounts. The original
+            # source artifact dir can still be bound via bwrap's source FD.
+            args += ["--tmpfs", str(root)]
+            if trial_root is not None and trial_root.is_relative_to(root):
+                path_parts = trial_root.relative_to(root).parts
+                for depth in range(1, len(path_parts) + 1):
+                    args += [
+                        "--dir", str(root.joinpath(*path_parts[:depth]))
+                    ]
+                args += ["--bind", str(trial_root), str(trial_root)]
         # The tmpfs over /tmp shadows the wrapper script itself whenever
         # it lives under /tmp (no-artifact-dir tempfile path) — re-bind
         # it read-only so the interpreter can still load it.
