@@ -106,3 +106,48 @@ def test_regular_standalone_executor_unchanged(monkeypatch):
     args = ex._sandbox_argv(["python3"], None, Path("/tmp/wrapper.py"))
     assert "--unshare-net" not in args
     assert ex._vm_isolation is False
+
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="bubblewrap not available")
+@pytest.mark.asyncio
+async def test_real_bwrap_masks_state_and_disables_parent_network(monkeypatch):
+    """Exercise actual namespaces, not only the command-line construction."""
+    import json
+    import socket
+    import tempfile
+
+    monkeypatch.setenv("ML_EPISTEME_TRIAL_ISOLATION", "enforced")
+    # /tmp would be shadowed by the separate private /tmp tmpfs, so
+    # stage the state tree under the user's home instead.
+    with tempfile.TemporaryDirectory(prefix=".trial-security-", dir=Path.home()) as base:
+        state = Path(base) / "state"
+        artifact = state / "artifacts" / "p" / "t"
+        artifact.mkdir(parents=True)
+        secret = state / "ingest.env"
+        secret.write_text("DO-NOT-EXPOSE\n")
+
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            port = server.getsockname()[1]
+            ex = LocalExecutor(sandbox="full", trace_reads="off")
+            ex._vm_state_root = state
+            code = (
+                "import json, os, socket\n"
+                f"secret = {str(secret)!r}\n"
+                "try:\n"
+                "    visible = open(secret).read()\n"
+                "except OSError:\n"
+                "    visible = 'DENIED'\n"
+                f"s = socket.socket(); s.settimeout(1); "
+                f"rc = s.connect_ex(('127.0.0.1', {port})); s.close()\n"
+                "open('artifact-written.txt', 'w').write('ok')\n"
+                "print(json.dumps({'secret': visible, 'connect_rc': rc, "
+                "'artifact': os.path.exists('artifact-written.txt')}))\n"
+            )
+            reply = json.loads(await ex.execute_code(code, artifact_dir=artifact))
+            assert reply["status"] == "completed", reply
+            observed = json.loads(reply["stdout"])
+            assert observed["secret"] == "DENIED"
+            assert observed["connect_rc"] != 0
+            assert observed["artifact"] is True
+            assert (artifact / "artifact-written.txt").read_text() == "ok"
