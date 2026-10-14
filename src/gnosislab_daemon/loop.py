@@ -265,13 +265,23 @@ class LoopRunner:
 
     def _driver_protocol_error(self, detail: str) -> None:
         self._emit("protocol_error", detail=detail)
-        if self.loop.dispatch in ("intent", "dispatched"):
-            # the turn may or may not have reached the backend — the
-            # protocol broke, so its outcome is unknowable
-            self.loop.uncertain_turn = self.loop.turn_id
-            self.loop.dispatch = ""
+        if self.loop.dispatch not in ("intent", "dispatched"):
+            self._close_driver()
+            self._set("blocked",
+                      blocked_reason=f"driver protocol: {detail}")
+            return
+        # the turn may or may not have reached the backend — the
+        # protocol broke, so its outcome is unknowable. Same semantics
+        # as a driver death found by the tick: mark uncertain, then let
+        # the check measure the workdir — the work may have completed
+        # before the protocol broke.
+        self._emit("uncertain_turn", turn_id=self.loop.turn_id)
+        self.loop.uncertain_turn = self.loop.turn_id
+        self.loop.dispatch = ""
+        self._uncertain = True
+        self._save()
         self._close_driver()
-        self._set("blocked", blocked_reason=f"driver protocol: {detail}")
+        self._run_check()
 
     def _close_driver(self) -> None:
         if self.driver is not None:

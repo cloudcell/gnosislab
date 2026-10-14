@@ -298,12 +298,18 @@ def test_session_loop_needs_input_parks(lab, monkeypatch):
 
 
 def test_session_loop_unresponsive_driver_blocked(lab, monkeypatch):
+    """Unresponsive driver mid-turn: same epistemic position as a dead
+    one — the backend may still be working, so the turn is uncertain:
+    check runs, fails, parks — never a blind re-dispatch."""
     monkeypatch.setenv("FAKE_DRIVER_UNRESPONSIVE", "1")
     d = make_daemon(lab, driver_status_seconds=1)
     lid = start(d, lab)
     st = drive(d, lid, timeout=25)
     assert st == "blocked"
-    assert "driver protocol" in d.loops[lid].loop.blocked_reason
+    loop = d.loops[lid].loop
+    assert loop.uncertain_turn
+    evs = events(lab["root"], lid)
+    assert "protocol_error" in evs and "uncertain_turn" in evs
 
 
 def test_session_loop_ready_timeout_blocked(lab, monkeypatch):
