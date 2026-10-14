@@ -799,8 +799,12 @@ class LocalExecutor(ExecutorRole):
             # The trial may only bind its own artifact directory out of
             # /state. All other /state paths (including symlink aliases
             # and ancestor mounts) are forbidden inputs.
-            for p in [*(extra_ro_paths or []), *(extra_rw_paths or []),
-                      *(target for _, target in (overlay_ro or []))]:
+            for p in [
+                *(extra_ro_paths or []),
+                *(extra_rw_paths or []),
+                *(src for src, _ in (overlay_ro or [])),
+                *(target for _, target in (overlay_ro or [])),
+            ]:
                 if self._overlaps_vm_state(p) and not (
                     trial_root is not None
                     and Path(p).resolve().is_relative_to(trial_root)
