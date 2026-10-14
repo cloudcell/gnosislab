@@ -16,7 +16,9 @@
 [![piwheel downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcloudcell%2Fgnosislab%2Fmaster%2Fstats%2Fpiwheels.json&query=%24.downloads&label=piwheels%20downloads&color=blue)](https://www.piwheels.org/project/gnosislab/)
 [![PyPI downloads](https://pypistats.com/api/badges/gnosislab?period=total)](https://pypistats.com/packages/gnosislab)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/gnosislab?period=total&units=NONE&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/gnosislab)
-[![GnosisLab-VM](https://img.shields.io/badge/GnosisLab--VM-isolated%20VM%20edition-6f42c1?logo=linux&logoColor=white)](https://github.com/cloudcell/gnosislab-vm)
+[![GnosisLab-VM for Linux](https://img.shields.io/badge/GnosisLab--VM-Linux-6f42c1?logo=linux&logoColor=white)](https://github.com/cloudcell/gnosislab-vm)
+[![GnosisLab-VM for Windows](https://img.shields.io/badge/GnosisLab--VM-Windows-6f42c1?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zIDUuNWw4LTEuMXY3LjFIM3pNMTIuNSA0LjJMMjEgM3Y4LjRoLTguNXpNMyAxMi45aDh2Ny4xbC04LTEuMXpNMTIuNSAxMi45SDIxdjguNGwtOC41LTEuMnoiLz48L3N2Zz4=)](https://github.com/cloudcell/gnosislab-vm)
+[![GnosisLab-VM for macOS](https://img.shields.io/badge/GnosisLab--VM-macOS-6f42c1?logo=apple&logoColor=white)](https://github.com/cloudcell/gnosislab-vm)
 [![Discord](https://img.shields.io/discord/903850592957517835?logo=discord&label=Discord)](https://discord.com/invite/v9JVtpVuUT)
 
 **VM edition available:** [GnosisLab-VM](https://github.com/cloudcell/gnosislab-vm) provides an optional isolated KVM/libvirt environment for GnosisLab research workflows.
