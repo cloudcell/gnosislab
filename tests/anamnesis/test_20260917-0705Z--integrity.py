@@ -203,9 +203,17 @@ async def test_integrity_monitor(mem_store):
         mem_store, config={"check_interval_seconds": 0.05}
     )
     assert task is not None
-    await asyncio.sleep(0.15)
+    # Poll for the records rather than assume tick cadence: on a loaded
+    # runner, asyncio.sleep granularity plus to_thread scheduling can
+    # delay a sweep well past its nominal interval.
+    import time
+    deadline = time.monotonic() + 5
+    lines = []
+    while len(lines) < 3 and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+        lines = list(log_dir.glob("check-*.jsonl"))[0] \
+            .read_text().splitlines()
     task.cancel()
-    lines = list(log_dir.glob("check-*.jsonl"))[0].read_text().splitlines()
     assert len(lines) >= 3
     assert json.loads(lines[-1])["trigger"] == "interval"
 
