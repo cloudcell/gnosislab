@@ -79,6 +79,13 @@ def _close_open_stores(monkeypatch):
 # --- Port allocation ---
 
 
+# Ports this process has handed out. The probe socket closes before
+# the caller's server binds, so the kernel can re-issue a port a
+# previous call returned — fixtures that claim several ports up front
+# (arete: 5) collided with themselves in CI.
+_claimed_ports: set[int] = set()
+
+
 def find_free_port(start: int = 18080) -> int:
     """Return a free TCP port (kernel-assigned ephemeral).
 
@@ -97,8 +104,10 @@ def find_free_port(start: int = 18080) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
-        if not 28050 <= port <= 28091:
-            return port
+        if 28050 <= port <= 28091 or port in _claimed_ports:
+            continue
+        _claimed_ports.add(port)
+        return port
     raise RuntimeError("no free port outside the production band 28050-28091")
 
 
