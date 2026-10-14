@@ -73,6 +73,9 @@ def test_vm_trial_rejects_sensitive_input_mounts(isolated):
     with pytest.raises(ValueError, match="protected trusted state"):
         ex._sandbox_argv(["python3"], artifact, wrapper,
                          overlay_ro=[(str(wrapper), str(state_db))])
+    with pytest.raises(ValueError, match="protected trusted state"):
+        ex._sandbox_argv(["python3"], artifact, wrapper,
+                         overlay_ro=[(str(state_db), str(wrapper))])
 
 
 def test_vm_trial_rejects_symlink_alias_to_state(isolated, tmp_path):
